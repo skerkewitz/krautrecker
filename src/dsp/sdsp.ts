@@ -142,6 +142,12 @@ export class SDsp {
   echoWrite = true;
   private histL = new Int32Array(8);
   private histR = new Int32Array(8);
+  /**
+   * Sample frames where a 16-bit clamp changed the signal, for the offline analysis: the voice
+   * mix, the echo input (incl. feedback) and the final output. A clamp in the voice mix is
+   * inaudible in level meters, because main volume scales the already clamped sum down.
+   */
+  readonly clips = { voice: 0, echo: 0, output: 0 };
 
   setSamples(samples: DspSample[]): void {
     this.samples = samples;
@@ -310,6 +316,10 @@ export class SDsp {
       let mainR = 0;
       let echoL = 0;
       let echoR = 0;
+      let rawL = 0;
+      let rawR = 0;
+      let rawEchoL = 0;
+      let rawEchoR = 0;
       for (let i = 0; i < 8; i++) {
         const v = voices[i];
         if (v.idle) {
@@ -342,9 +352,13 @@ export class SDsp {
         const r = (out * v.volR) >> 7;
         mainL = clamp16(mainL + l);
         mainR = clamp16(mainR + r);
+        rawL += l;
+        rawR += r;
         if (v.echo) {
           echoL = clamp16(echoL + l);
           echoR = clamp16(echoR + r);
+          rawEchoL += l;
+          rawEchoR += r;
         }
       }
 
@@ -369,12 +383,19 @@ export class SDsp {
       firL = clamp16(firL + ((hl[7] * fir[7]) >> 6)) & ~1;
       firR = clamp16(firR + ((hr[7] * fir[7]) >> 6)) & ~1;
 
-      const outLeft = clamp16(((mainL * this.mainVolL) >> 7) + ((firL * ep.volumeL) >> 7));
-      const outRight = clamp16(((mainR * this.mainVolR) >> 7) + ((firR * ep.volumeR) >> 7));
+      const rawOutL = ((mainL * this.mainVolL) >> 7) + ((firL * ep.volumeL) >> 7);
+      const rawOutR = ((mainR * this.mainVolR) >> 7) + ((firR * ep.volumeR) >> 7);
+      const outLeft = clamp16(rawOutL);
+      const outRight = clamp16(rawOutR);
+      if (rawL !== mainL || rawR !== mainR) this.clips.voice++;
+      if (rawOutL !== outLeft || rawOutR !== outRight) this.clips.output++;
 
       if (this.echoWrite) {
-        this.echoBuf[pos] = clamp16(echoL + ((firL * ep.feedback) >> 7)) & ~1;
-        this.echoBuf[pos + 1] = clamp16(echoR + ((firR * ep.feedback) >> 7)) & ~1;
+        const inL = echoL + ((firL * ep.feedback) >> 7);
+        const inR = echoR + ((firR * ep.feedback) >> 7);
+        this.echoBuf[pos] = clamp16(inL) & ~1;
+        this.echoBuf[pos + 1] = clamp16(inR) & ~1;
+        if (rawEchoL !== echoL || rawEchoR !== echoR || clamp16(inL) !== inL || clamp16(inR) !== inR) this.clips.echo++;
       }
       if (++this.echoPos >= this.echoFrames) this.echoPos = 0;
 

@@ -84,3 +84,39 @@ export function floatToInt16(data: Float32Array): Int16Array {
   }
   return out;
 }
+
+/**
+ * Stereo 16-bit PCM WAV. Input is the DSP's float output (-1..1, exactly int16 / 32768), so the
+ * samples are scaled by 32768 and come out bit-identical to the S-DSP model's output.
+ */
+export function encodeWav16(left: Float32Array, right: Float32Array, sampleRate: number): Uint8Array {
+  const frames = Math.min(left.length, right.length);
+  const dataBytes = frames * 4;
+  const buf = new ArrayBuffer(44 + dataBytes);
+  const view = new DataView(buf);
+  const tag = (o: number, s: string) => {
+    for (let i = 0; i < 4; i++) view.setUint8(o + i, s.charCodeAt(i));
+  };
+  tag(0, 'RIFF');
+  view.setUint32(4, 36 + dataBytes, true);
+  tag(8, 'WAVE');
+  tag(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 2, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 4, true);
+  view.setUint16(32, 4, true);
+  view.setUint16(34, 16, true);
+  tag(36, 'data');
+  view.setUint32(40, dataBytes, true);
+  const toInt = (x: number) => {
+    const v = Math.round(x * 32768);
+    return v < -32768 ? -32768 : v > 32767 ? 32767 : v;
+  };
+  for (let f = 0; f < frames; f++) {
+    view.setInt16(44 + f * 4, toInt(left[f]), true);
+    view.setInt16(46 + f * 4, toInt(right[f]), true);
+  }
+  return new Uint8Array(buf);
+}
