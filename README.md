@@ -79,6 +79,33 @@ comment and jumps to it. Clearing the text removes a marker or comment.
 The project autosaves to the browser (IndexedDB). ☰ → **Save** downloads it as a single `.json` file with
 the samples inside; ☰ → **Open** loads one back.
 
+## Command-line tools
+
+Two commands let you check and edit a song without opening the app. Both take a saved project file,
+or `demo` for the built-in demo song.
+
+```sh
+npm run analyze -- song.json                  # report: levels, clipping, balance, tuning, voices
+npm run analyze -- demo --json                # the full result as JSON
+npm run analyze -- song.json --wav mix.wav --stems stems/
+npm run pattern -- export song.json "Verse" verse.txt
+npm run pattern -- import song.json "Verse" verse.txt --out song2.json
+```
+
+`analyze` renders the song through the same compiler and S-DSP model the app plays, once through the
+intro and once through the loop, and reports each order entry and each track: RMS and peak level,
+clipping (including clipping inside the DSP's voice mix, which the output level does not show), share
+of the mix, energy in four frequency bands with a hint where two tracks crowd the same band, and how
+far each track's notes are from equal temperament in cents. It also lists voice usage, diagnostics, the
+key and chords, and line comments. `--wav` writes the mix and `--stems` one file per track (stereo,
+16-bit, 32 kHz); the stems add up to the mix.
+
+`pattern` converts a pattern (by ID or name) to and from pattern text, a tracker-style text form with
+one line per pattern line, such as `00 | C-4 70 .. . P20 ... | OFF .. .. . ... ... |`; the format is
+described at the top of [src/io/patternText.ts](src/io/patternText.ts). Import replaces the pattern's
+cells and keeps its tracks and devices. The pattern editor uses the same text for the system
+clipboard, so Ctrl+C in the editor gives you text you can paste anywhere, and Ctrl+V accepts it back.
+
 ## Where to read next
 
 - [docs/KICKOFF.md](docs/KICKOFF.md): the product brief and the source of truth for scope.

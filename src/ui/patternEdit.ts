@@ -1,7 +1,9 @@
+import { blockToText, tryTextToBlock } from '../io/patternText';
 import { clamp, FX_BY_LETTER } from '../model/notes';
 import { NOTE_CUT, NOTE_OFF, type Cell, type Effect, type Pattern } from '../model/types';
 import { clonePatternCells, currentPattern, Field, FIELD_COUNT, fxField, store, setCell, updatePattern, type Cursor, type Selection } from './store';
 import { commentsAfterLineDelete, commentsAfterLineInsert } from './harmonyEdit';
+import { readClipboardText, writeClipboardText } from './systemClipboard';
 
 /**
  * Pattern editing operations used by the keyboard and MIDI handlers. They read and write the
@@ -249,6 +251,13 @@ export function copySelection(): boolean {
     }
     clipboard.push(row);
   }
+  // The system clipboard gets the same block as pattern text, for other apps and other tabs.
+  const tracks: number[] = [];
+  for (let fc = r.col0; fc <= r.col1; fc++) {
+    if (fc > r.col0 && flat[fc].track === flat[fc - 1].track) tracks[tracks.length - 1]++;
+    else tracks.push(1);
+  }
+  writeClipboardText(blockToText({ cells: clipboard, tracks }));
   return true;
 }
 
@@ -276,18 +285,26 @@ export function cutSelection(): void {
   if (copySelection()) deleteSelection();
 }
 
-export function paste(): void {
+/**
+ * Pastes at the cursor: the system clipboard when it holds pattern text, else the internal
+ * clipboard. Reading the system clipboard is asynchronous, so the position is taken at the key press.
+ */
+export async function paste(): Promise<void> {
   const s = store.getState();
-  const pat = currentPattern(s);
-  if (!pat || !clipboard) return;
+  const patternId = s.ui.currentPatternId;
+  const cursor = s.ui.cursor;
+  const text = await readClipboardText();
+  const data = (text === null ? null : tryTextToBlock(text)?.cells) ?? clipboard;
+  const pat = store.getState().project.patterns.find((p) => p.id === patternId);
+  if (!pat || !data) return;
   const flat = flatColumns(pat);
-  const start = flatIndex(pat, s.ui.cursor.track, s.ui.cursor.column);
-  const data = clipboard;
+  const start = flatIndex(pat, cursor.track, cursor.column);
+  if (start < 0) return;
   store.update((p) =>
     updatePattern(p, pat.id, (pt) => {
       const next = clonePatternCells(pt);
       data.forEach((row, dl) => {
-        const l = s.ui.cursor.line + dl;
+        const l = cursor.line + dl;
         if (l >= pt.lines) return;
         row.forEach((cell, dc) => {
           const f = flat[start + dc];
