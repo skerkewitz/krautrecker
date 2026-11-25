@@ -209,4 +209,4 @@ A user can open the site, import a few WAV samples, build a multisampled synth d
 | Driver reserve in ARAM estimate | 8 KB |
 | Player | own S-DSP model in TypeScript; real emulator later |
 | Sound driver | decided in Milestone 2 |
-| License | to be decided by the owner before publishing |
+| License | MIT (decided; see [LICENSE](../LICENSE)) |
