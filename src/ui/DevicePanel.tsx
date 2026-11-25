@@ -115,6 +115,9 @@ function DeviceEditor({ device }: { device: Device }) {
       <Row label="Pan">
         <Slider value={device.pan} min={-64} max={63} onChange={(v) => set({ pan: v }, 'pan')} />
       </Row>
+      <Row label="Fine tune" title="Detune in cents, added to every note of this device.">
+        <Slider value={device.fineTune} min={-100} max={100} onChange={(v) => set({ fineTune: v }, 'fine')} format={(v) => `${v > 0 ? '+' : ''}${v} ct`} />
+      </Row>
       <Row label="Echo" title="Route this device's voices to the global echo unit.">
         <input type="checkbox" checked={device.echo} onChange={(e) => set({ echo: e.target.checked }, 'echo')} />
       </Row>

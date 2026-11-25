@@ -2,8 +2,9 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { IR } from '../compiler/ir';
 import { newTrack } from '../model/defaults';
 import { FX_LETTERS, hex, noteName } from '../model/notes';
-import { FX_COLUMNS, NOTE_CUT, NOTE_OFF, type Cell, type Pattern } from '../model/types';
+import { FX_COLUMNS, NOTE_CUT, NOTE_OFF, type Cell, type Pattern, type Track } from '../model/types';
 import { auditionOff, auditionOn, playFromCursor, playPattern, togglePlay } from './actions';
+import { FX_LETTER_SUMMARY, fxHelpText } from './fxHelp';
 import {
   backspaceLine,
   clearAtCursor,
@@ -20,13 +21,14 @@ import {
   selectionRect,
   setCursor,
 } from './patternEdit';
-import { clonePatternCells, Field, FIELD_COUNT, store, updatePattern, useStore } from './store';
+import { clonePatternCells, Field, FIELD_COUNT, fxField, store, updatePattern, useStore } from './store';
 import { measureChar, prepareCanvas, theme } from './theme';
+import { NumberInput } from './widgets';
 
 /** Characters per note column: "C-4 7F 40 0 U08 V23" plus a gap. */
 const COL_CHARS = 20;
 const GUTTER_CHARS = 4;
-const HEADER_H = 46;
+const HEADER_H = 66;
 /** Character offset of each field inside a note column. */
 const FIELD_X = [0, 4, 5, 7, 8, 10, 12, 13, 14, 16, 17, 18];
 const FIELD_W = [3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
@@ -445,6 +447,30 @@ function TrackHeader({ pattern, index, width, active }: { pattern: Pattern; inde
           ×
         </button>
       </div>
+      <TrackMixRow pattern={pattern} index={index} />
+    </div>
+  );
+}
+
+/** Static track mix of this pattern; the effects M, K and X change it until the pattern ends. */
+function TrackMixRow({ pattern, index }: { pattern: Pattern; index: number }) {
+  const t = pattern.tracks[index];
+  const set = (patch: Partial<Track>, key: string) =>
+    store.update(
+      (p) => updatePattern(p, pattern.id, (pat) => ({ ...pat, tracks: pat.tracks.map((x, i) => (i === index ? { ...x, ...patch } : x)) })),
+      `tmix:${key}:${pattern.id}:${index}`,
+    );
+  return (
+    <div className="th-row th-mix">
+      <label title="Track volume (0-127), multiplied into every note. M and K change it until the pattern ends.">
+        V<NumberInput value={t.volume} min={0} max={127} onChange={(v) => set({ volume: v }, 'vol')} width={34} />
+      </label>
+      <label title="Track pan (-64..63), added to every note's pan. X changes it until the pattern ends.">
+        P<NumberInput value={t.pan} min={-64} max={63} onChange={(v) => set({ pan: v }, 'pan')} width={34} />
+      </label>
+      <label title="Transpose in semitones, added to every note before the zone is chosen.">
+        T<NumberInput value={t.transpose} min={-48} max={48} onChange={(v) => set({ transpose: v }, 'tr')} width={30} />
+      </label>
     </div>
   );
 }
@@ -502,9 +528,19 @@ function PatternBar({ pattern }: { pattern: Pattern }) {
       >
         + Track
       </button>
+      <FxHelp pattern={pattern} />
       <span className="hint">
         {ui.editMode ? 'EDIT' : 'play'} · oct {ui.octave} · step {ui.editStep}
       </span>
     </div>
   );
+}
+
+/** Name and meaning of the effect under the cursor, or the effect letters on an empty effect field. */
+function FxHelp({ pattern }: { pattern: Pattern }) {
+  const cursor = useStore((s) => s.ui.cursor);
+  const fxf = fxField(cursor.field);
+  if (!fxf) return null;
+  const fx = pattern.tracks[cursor.track]?.cells[cursor.line]?.[cursor.column]?.fx?.[fxf.index];
+  return <span className="fx-help">{fx ? fxHelpText(fx.type) : FX_LETTER_SUMMARY}</span>;
 }

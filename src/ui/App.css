@@ -597,6 +597,18 @@ legend {
 .pattern-bar input[type='number'] {
   width: 56px;
 }
+.pattern-bar .fx-help {
+  margin-left: auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text);
+  font-family: Consolas, monospace;
+}
+.pattern-bar .fx-help + .hint {
+  margin-left: 0;
+}
 .pattern-bar .hint {
   margin-left: auto;
   color: var(--dim);
@@ -647,6 +659,23 @@ legend {
   color: var(--dim);
   font-size: 11.5px;
   margin-right: auto;
+}
+.th-mix label {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--dim);
+  font-size: 11.5px;
+}
+.th-mix input[type='number'] {
+  padding: 0 2px;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.th-mix input[type='number']::-webkit-inner-spin-button,
+.th-mix input[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 .pe-canvas {
   display: block;
