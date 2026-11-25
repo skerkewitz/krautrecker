@@ -55,3 +55,7 @@ samples inside; **Open** loads one back.
 - [docs/KICKOFF.md](docs/KICKOFF.md): the product brief and the source of truth for scope.
 - [docs/design.md](docs/design.md): how the compiler, voice allocator and DSP model work, and why.
 - [CLAUDE.md](CLAUDE.md): the rules every change must follow.
+
+## License
+
+Krautrecker is released under the [MIT License](LICENSE).
