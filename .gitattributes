@@ -1,0 +1,3 @@
+# Vitest writes snapshots with LF line endings; keep them LF in the working tree so runs do not
+# show phantom changes on Windows (core.autocrlf).
+*.snap text eol=lf

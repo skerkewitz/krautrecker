@@ -70,3 +70,17 @@ describe('feature tracks together', () => {
     expect(127 - minFull).toBeGreaterThan(64 - minHalf);
   });
 });
+
+describe('surround with other volume changes', () => {
+  it('every tremolo volume change keeps the right side inverted', () => {
+    const ir = compileSong(
+      fixture([{ device: device('s', 'poly', { surround: true, tremolo: { depth: 40, rate: 8, delay: 0 } }), cells: [[0, 0, { note: 60 }]] }]),
+    );
+    const lane = ir.voices[0];
+    const on = lane[0] as Extract<VoiceEvent, { type: 'keyOn' }>;
+    expect(on.volR).toBeLessThan(0);
+    const changes = volumesIn(lane, 1, 96);
+    expect(changes.length).toBeGreaterThan(0);
+    for (const e of changes) expect(e.volR).toBeLessThanOrEqual(0);
+  });
+});

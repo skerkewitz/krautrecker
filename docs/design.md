@@ -93,13 +93,16 @@ panel and diagnostics report what was changed.
 
 `SDsp` models what defines the SNES sound: live BRR decoding (so the filter history really carries over
 at the loop point), 4-point Gaussian interpolation with the hardware table, the 14-bit pitch register,
-ADSR and GAIN envelopes driven by the hardware rate tables and the shared rate counter, per-voice and
-main volume, and the echo unit with its 8-tap FIR filter and feedback.
+ADSR and GAIN envelopes driven by the hardware rate tables and the shared rate counter, signed per-voice
+and main volume, the noise generator, pitch modulation, and the echo unit with its 8-tap FIR filter,
+feedback and write enable.
 
 It is not cycle-exact. Register writes take effect at once, the key-on delay of a few samples is
 skipped, and samples are held as separate arrays rather than inside a 64 KB ARAM image with a sample
-directory. Noise and pitch modulation are reserved as IR event types but not modelled. A real emulator
-core (kickoff §8, out of scope) would replace this model as the "hardware-exact" player.
+directory. The noise generator and pitch modulation follow blargg's snes_spc and Anomie's S-DSP notes
+as recalled from memory; the tests confirm the noise register's maximal period and rates, but the exact
+cycle order of noise and pitch-modulation updates is unverified. A real emulator core (kickoff §8, out
+of scope) would replace this model as the "hardware-exact" player.
 
 One envelope detail can look like a bug: a note with attack 10 often peaks at about 0x7E0, not 0x7FF.
 The S-DSP switches from attack to decay when the computed level overflows, even on a sample where the
@@ -132,19 +135,105 @@ device while holding notes applies to the held notes; changing its mode ends the
 Raw sample audition in the sample panel bypasses devices on purpose, so it uses a third, small `SDsp`
 that renders only while a sample is sounding.
 
-## Effects are one byte and last one line
+## Effects are one byte, act on their line, and remember their last value
 
 Every effect stores a type and one byte, as in classic trackers, so it fits in one cell and is typed as
-a letter plus two hex digits. Each effect acts only on the line it is written on; to keep a slide going,
-write it on every line. The byte's meaning per effect is documented on `Effect` in
-`src/model/types.ts`. Slides and portamento move `value / 16` semitones per line, spread evenly over its
-ticks, which gives the fractional semitones per line the kickoff asks for.
+a letter plus two hex digits. Each note column has two effect columns, so a slide and a volume fade can
+share a line. The byte's meaning for each of the 21 effects is documented on `Effect` in
+`src/model/types.ts`, and the pattern editor shows it while the cursor is on an effect field.
+
+Effects act on the line they are written on. To keep a slide going, you write it again on the next
+line with the value `00`, which repeats the last non-zero value of that effect in the same column (the
+FastTracker 2 convention). This effect memory is resolved in one place, `FxMemory`, as a line's effects
+are read, so every effect implementation sees the value that actually plays. It carries across lines
+and patterns in song order. Vibrato and tremolo remember each nibble separately, so `V05` after `V23`
+plays as `V25`. Two consequences follow from resolving memory at compile time: playing one pattern on
+its own starts with empty memory, and after the song loops back, memory continues from the song's end,
+not from the loop point.
+
+Effects fall into three groups. Note effects (slides, porta, vibrato, tremolo, volume and pan slides,
+cut, retrigger, GAIN switch, noise) act on the note of their column. Track effects (`M` volume, `K`
+volume slide, `X` pan) act on the whole track, and global effects (`F` tempo, main and echo volume,
+echo feedback, echo freeze) act on the whole song. Track and global effects work on lines where no note
+sounds, so they run through their own hooks in `TrackProcessor.tick` rather than through the per-note
+effect code.
+
+## Track mix: header values reset at every pattern
+
+Each track in a pattern has a volume, pan and transpose in its header. `M`, `K` and `X` change the
+track's current volume and pan, and that change lasts until the next pattern starts, where the values
+return to that pattern's header. We chose the reset so that a pattern sounds the same wherever it sits
+in the order list and when it is played on its own, and so that the header shows what the track really
+starts with. The cost is that a fade across two patterns needs the second pattern's header value, or an
+`M` on its first line.
+
+Transpose shifts notes before zone selection, so on a drum track it changes which drum plays. A
+device's fine tune adds cents to every note's pitch.
+
+## Global effects and the song loop point
+
+Tempo, main volume and echo settings can change during the song. Global effects are collected from all
+tracks during stage 2 and resolved in a second pass in tick order, because a slide on one track must
+continue from a value that another track set earlier, and stage 2 runs one track over the whole song
+before the next. When two tracks set the same value on the same tick, the later track wins. The IR
+keeps its tick grid; the sequencer changes its samples-per-tick at each tempo event.
+
+`Project.loopOrderIndex` marks where the song continues after its last order entry, as almost every
+SNES track plays an intro once. When playback starts mid-song or jumps back to the loop point, the
+sequencer replays the last global event of each kind before that tick, so tempo, volumes and echo are
+what the song has there. Replaying the events already in the IR keeps a single source for that state,
+where per-line snapshots would duplicate it.
+
+`W`, `E`, `H` and `Y` change the magnitude of the main and echo volume but keep each side's sign, so a
+phase inversion set in the Hardware view survives a fade. Freezing the echo (`Z00`) stops writes to the
+echo buffer, which then repeats what it holds.
+
+## Long releases switch the voice to GAIN
+
+The S-DSP's own key-off silences a voice in about 8 ms, which is too short for pads and strings. SNES
+drivers get longer releases by switching the voice to a GAIN decrease mode at note-off and keying it off
+only once it is silent, and a device's `release` setting does the same. The compiler computes when the
+envelope reaches zero by simulating the hardware's step arithmetic from the worst-case level 0x7FF, and
+emits the key-off then. From note-off the voice counts as releasing, so it is the first choice for
+stealing and is not reported when stolen; voice demand ends at note-off, while voice use lasts until
+the key-off. A cut (`^^^` or the `C` effect) is always a hard key-off.
+
+The worst-case timing is safe but generous: an exponential fade becomes inaudible well before it
+reaches zero, so a slow exponential release holds its voice longer than it is heard. A new note in the
+same column, or any new note on a mono or arp device, takes over the releasing voice and ends the tail,
+as on tracker channels and SNES drivers.
+
+Tremolo only ever lowers the volume. Its dip follows a raised cosine scaled to the note's volume, so a
+note at full volume dips by exactly the set depth and nothing clips. Device tremolo and the `T` effect
+add up. An advanced device setting replaces ADSR by a raw GAIN byte for the whole note, and the `G`
+effect switches a sounding note to a GAIN byte.
+
+## Noise, pitch modulation and surround
+
+A zone with `noise`, or the `N` effect, makes a note play the chip's noise generator instead of its
+sample. The noise clock is a single global register, so overlapping noise notes that ask for different
+clocks overwrite each other; the last write wins and the compiler warns. A noise voice still decodes
+its sample underneath, so a one-shot sample ending silences the noise too. That is a legitimate way to
+shape a noise burst, so the compiler only notes it rather than warning. Every noise key-on re-sends the
+noise flag and its clock, which keeps mid-song starts and loops correct.
+
+Pitch modulation lets a voice's pitch follow the output of the voice just below it. A device with a
+`pitchModSource` therefore needs a voice whose lower neighbour plays a note of the source device, and
+the allocator places such notes last within a tick and looks for that position. When none exists, the
+note plays unmodulated with a warning rather than being dropped, because an unmodulated note at the
+right time and pitch does less damage than a missing one. The modulator may be silent: modulation uses
+the voice's output before its volume.
+
+Surround inverts a device's right channel, the classic SNES widening trick. It is applied last in the
+volume calculation, so every volume write, including tremolo and track mix changes, keeps the
+inversion.
 
 ## Volume, pan and the ARAM estimate
 
-Device, zone and cell volume multiply. Pan adds device, zone and cell pan, and the pan law keeps the
-centre at full volume on both sides, attenuating only the far side. That way a centred note is exactly
-as loud as before, and panning never makes a sound quieter than leaving it centred.
+Device, zone, note and track volume multiply, tremolo then dips the result, and surround inverts the
+right side last. Pan adds device, zone, note and track pan, and the pan law keeps the centre at full
+volume on both sides, attenuating only the far side. That way a centred note is exactly as loud as
+before, and panning never makes a sound quieter than leaving it centred.
 
 The ARAM estimate adds the assumed driver size (8 KB by default), 4 bytes per sample directory entry,
 the real BRR sizes, the echo buffer (2 KB per 16 ms of delay) and the song data. Song data is a rough
@@ -153,7 +242,7 @@ slides and vibrato are excluded, because a driver computes those itself.
 
 ## Known gaps in this prototype
 
-These are open on purpose, so that Milestone 1 stays small:
+These are open on purpose, so that the prototype stays small:
 
 - The compiler runs on the main thread. It takes milliseconds for the demo; move it to a Web Worker when
   songs get long enough to make typing lag.
@@ -162,3 +251,12 @@ These are open on purpose, so that Milestone 1 stays small:
 - Autosave to IndexedDB has no automated test, because Node has no IndexedDB. The file round trip that
   autosave uses is tested.
 - The BRR encoder runs on the main thread too. A 10-second sample takes a noticeable moment to import.
+- Note lengths are converted to ticks at the base tempo. After a tempo increase the allocator can free a
+  one-shot voice before its sample has finished, and after a decrease it holds voices too long. The fix
+  is a tempo map in the compiler.
+- Pitch slides, vibrato and tremolo freeze when a note is released, because the note leaves stage 2's
+  active list at note-off.
+- Live play runs at the base tempo with the Hardware view's echo settings; it does not follow tempo or
+  echo changes made by effects in the song. A pitch-modulated device played live sounds unmodulated
+  unless its source device is also sounding.
+- Global events carry no source reference, so the IR view cannot jump from them to their cell.

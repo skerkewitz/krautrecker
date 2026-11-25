@@ -47,11 +47,21 @@ most important ones:
 | Shift+arrows, Ctrl+C/X/V | select, copy, cut, paste |
 | Ctrl+Z, Ctrl+Y | undo, redo |
 
-Each note column has five fields: note, volume (`00`–`7F`), pan (`00`–`7F`, `40` is centre), note delay
-in ticks, and one effect. Effects are a letter plus one hex byte and act only on the line they are on:
-`U`/`D` slide up/down by xx/16 semitones per line, `P` glides to the note, `V` vibrato (x = depth in
-quarter semitones, y = speed), `A` volume slide (x up, y down per tick), `C` cut after xx ticks, `R`
-retrigger every xx ticks.
+Each note column has six fields: note, volume (`00`–`7F`), pan (`00`–`7F`, `40` is centre), note delay
+in ticks, and two effect columns. An effect is a letter plus one hex byte and acts on the line it is
+on; for slides and other continuous effects, `00` repeats the last value, so you continue a slide by
+writing its letter with `00` on the next lines. With the cursor on an effect field, the pattern bar
+explains that effect.
+
+| Group | Letters |
+|---|---|
+| Note | `U`/`D` pitch slide, `P` portamento, `V` vibrato, `T` tremolo, `A` volume slide, `L` pan slide, `C` cut, `R` retrigger, `G` switch to a GAIN envelope, `N` noise on/off |
+| Track | `M` track volume, `K` track volume slide, `X` track pan |
+| Song | `F` tempo, `W` main volume, `H` main volume slide, `E` echo volume, `Y` echo volume slide, `B` echo feedback, `Z` echo freeze |
+
+Devices also offer long releases, a raw GAIN envelope, tremolo, vibrato fade-in, fine tune, surround
+and pitch modulation, and each zone can play the chip's noise generator instead of its sample. The Song
+view sets the loop point where playback continues after the end.
 
 The project autosaves to the browser (IndexedDB). ☰ → **Save** downloads it as a single `.json` file with
 the samples inside; ☰ → **Open** loads one back.
