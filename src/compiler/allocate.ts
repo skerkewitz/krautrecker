@@ -246,6 +246,7 @@ export function allocateVoices(
         diagnostics.push({
           kind: 'noteDropped',
           severity: 'error',
+          category: 'hardware',
           message: `${describe(note)} was dropped: all voices are busy with higher-priority notes.`,
           source: note.keyOn.source,
           tick,
@@ -256,6 +257,7 @@ export function allocateVoices(
         diagnostics.push({
           kind: 'voiceStolen',
           severity: 'warning',
+          category: 'hardware',
           message: `Voice ${a.voice} taken from ${describe(a.stolen)} by ${describe(note)}${a.byLimit ? ' (device voice limit)' : ''}.`,
           source: a.stolen.keyOn.source,
           tick,

@@ -2,6 +2,7 @@ import { buildSample, type BuiltSample } from '../brr/sampleBuild';
 import { DSP_RATE } from '../dsp/tables';
 import type { Pattern, PatternId, Project } from '../model/types';
 import { allocateVoices, describeNote } from './allocate';
+import { runChecks } from './checks';
 import { expandTrack, type ExpandContext, type SongPattern } from './expand';
 import { isAutoGlobal, resolveGlobalFx, type GlobalFxCommand } from './globalFx';
 import { ARAM_CAPACITY, VOICE_COUNT, type AramEstimate, type Diagnostic, type IR, type LineInfo } from './ir';
@@ -35,7 +36,7 @@ export function compileSong(project: Project, options: CompileOptions = {}): IR 
     built.set(s.id, b);
     slots.set(s.id, i);
     for (const note of b.notes) {
-      diagnostics.push({ kind: 'loopRealigned', severity: 'info', message: `Sample "${s.name}": ${note}` });
+      diagnostics.push({ kind: 'loopRealigned', severity: 'info', category: 'hardware', message: `Sample "${s.name}": ${note}` });
     }
   });
 
@@ -123,9 +124,13 @@ export function compileSong(project: Project, options: CompileOptions = {}): IR 
     diagnostics.push({
       kind: 'aramOverBudget',
       severity: 'error',
+      category: 'hardware',
       message: `ARAM estimate is ${aram.total} bytes, over the 64 KB budget by ${aram.total - aram.capacity} bytes. Lower sample rates, shorten samples or reduce the echo delay.`,
     });
   }
+
+  // Aliasing and the musical hints read the finished notes and the written score.
+  runChecks({ project, song, devices: ctx.devices, samples, built, notes: ctx.notes, tpl, samplesPerTick }, diagnostics);
 
   // Stable order for display: by tick (diagnostics without a tick first).
   const ordered = diagnostics.map((d, i) => ({ d, i })).sort((a, b) => (a.d.tick ?? -1) - (b.d.tick ?? -1) || a.i - b.i);
