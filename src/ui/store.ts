@@ -9,8 +9,8 @@ import { loadLayout, type Layout } from './layout';
  * it is recompiled whenever the project object changes and never stored.
  */
 
-/** Sub-positions inside a note column: note, vol (2 digits), pan (2), delay, fx type, fx (2). */
-export const FIELD_COUNT = 9;
+/** Sub-positions inside a note column: note, vol (2 digits), pan (2), delay, then per effect column a type letter and 2 digits. */
+export const FIELD_COUNT = 12;
 export const Field = {
   Note: 0,
   VolHi: 1,
@@ -21,7 +21,17 @@ export const Field = {
   FxType: 6,
   FxHi: 7,
   FxLo: 8,
+  Fx2Type: 9,
+  Fx2Hi: 10,
+  Fx2Lo: 11,
 } as const;
+
+/** For a cursor field in an effect column: which effect column, and which part of it. */
+export function fxField(field: number): { index: number; part: 'type' | 'hi' | 'lo' } | null {
+  if (field < Field.FxType) return null;
+  const rel = field - Field.FxType;
+  return { index: Math.floor(rel / 3), part: (['type', 'hi', 'lo'] as const)[rel % 3] };
+}
 
 export interface Cursor {
   track: number;

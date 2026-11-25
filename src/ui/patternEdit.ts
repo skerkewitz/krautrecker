@@ -1,6 +1,6 @@
 import { clamp, FX_BY_LETTER } from '../model/notes';
-import { NOTE_CUT, NOTE_OFF, type Cell, type Pattern } from '../model/types';
-import { clonePatternCells, currentPattern, Field, FIELD_COUNT, store, setCell, updatePattern, type Cursor, type Selection } from './store';
+import { NOTE_CUT, NOTE_OFF, type Cell, type Effect, type Pattern } from '../model/types';
+import { clonePatternCells, currentPattern, Field, FIELD_COUNT, fxField, store, setCell, updatePattern, type Cursor, type Selection } from './store';
 
 /**
  * Pattern editing operations used by the keyboard and MIDI handlers. They read and write the
@@ -106,10 +106,16 @@ export function enterChar(ch: string): boolean {
   const s = store.getState();
   const c = s.ui.cursor;
   const upper = ch.toUpperCase();
-  if (c.field === Field.FxType) {
+  const fxf = fxField(c.field);
+  if (fxf?.part === 'type') {
     const type = FX_BY_LETTER[upper];
     if (!type) return false;
-    store.update((p) => setCell(p, s.ui.currentPatternId, c.track, c.line, c.column, (cell) => ({ ...(cell ?? {}), fx: { type, value: cell?.fx?.value ?? 0 } })));
+    store.update((p) =>
+      setCell(p, s.ui.currentPatternId, c.track, c.line, c.column, (cell) => ({
+        ...(cell ?? {}),
+        fx: withEffect(cell?.fx, fxf.index, { type, value: cell?.fx?.[fxf.index]?.value ?? 0 }),
+      })),
+    );
     advance();
     return true;
   }
@@ -135,21 +141,27 @@ export function enterChar(ch: string): boolean {
       case Field.Delay:
         next.delay = clamp(d, 0, tpl - 1);
         break;
-      case Field.FxHi:
-      case Field.FxLo: {
-        const fx = next.fx ?? { type: 'slideUp' as const, value: 0 };
+      default: {
+        if (!fxf) return cell;
+        const fx = next.fx?.[fxf.index] ?? { type: 'slideUp' as const, value: 0 };
         const v = fx.value;
-        next.fx = { type: fx.type, value: c.field === Field.FxHi ? (d << 4) | (v & 15) : (v & 0xf0) | d };
-        break;
+        next.fx = withEffect(next.fx, fxf.index, { type: fx.type, value: fxf.part === 'hi' ? (d << 4) | (v & 15) : (v & 0xf0) | d });
       }
-      default:
-        return cell;
     }
     return next;
   };
   store.update((p) => setCell(p, s.ui.currentPatternId, c.track, c.line, c.column, apply));
   advance();
   return true;
+}
+
+/** Returns the effect list with column `index` set (or cleared); undefined when no effect is left. */
+export function withEffect(list: (Effect | null)[] | undefined, index: number, fx: Effect | null): (Effect | null)[] | undefined {
+  const next = (list ?? []).slice();
+  while (next.length <= index) next.push(null);
+  next[index] = fx;
+  while (next.length > 0 && !next[next.length - 1]) next.pop();
+  return next.length ? next : undefined;
 }
 
 /** Clears the field under the cursor, or the whole selection. */
@@ -170,7 +182,11 @@ export function clearAtCursor(): void {
       } else if (c.field <= Field.VolLo) delete next.volume;
       else if (c.field <= Field.PanLo) delete next.pan;
       else if (c.field === Field.Delay) delete next.delay;
-      else delete next.fx;
+      else {
+        const fxf = fxField(c.field);
+        if (fxf) next.fx = withEffect(next.fx, fxf.index, null);
+        if (!next.fx) delete next.fx;
+      }
       return next;
     }),
   );

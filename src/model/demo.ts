@@ -121,7 +121,7 @@ function demoPattern(id: string, name: string, variation: boolean): Pattern {
     chord.notes.forEach((n, c) => put(p, 2, base, c, { note: n + 12, volume: 90 }));
     // Pad: the chord, softer; the variation adds a slide-up into the next bar.
     chord.notes.forEach((n, c) => put(p, 3, base, c, { note: n, volume: 80 }));
-    if (variation) put(p, 3, base + 15, 0, { fx: { type: 'vibrato', value: 0x23 } });
+    if (variation) put(p, 3, base + 15, 0, { fx: [{ type: 'vibrato', value: 0x23 }] });
   }
   return p;
 }
@@ -158,14 +158,15 @@ export function demoProject(): Project {
   pad.pan = 20;
   pad.echo = true;
   pad.envelope = { attack: 9, decay: 3, sustainLevel: 5, sustainRate: 0 };
-  pad.vibrato = { depth: 0.08, rate: 24, delay: 12 };
+  pad.vibrato = { depth: 0.08, rate: 24, delay: 12, fadeIn: 0 };
 
   project.devices = [drums, bass, arp, pad];
   const a = demoPattern('pat_a', 'Groove', false);
   const b = demoPattern('pat_b', 'Groove + fill', true);
   project.patterns = [a, b];
   project.order = [a.id, a.id, b.id];
-  project.hardware.echo = { delay: 5, feedback: 50, volumeL: 40, volumeR: 40, fir: [96, 16, 8, 4, 2, 1, 0, 0] };
-  project.hardware.mainVolume = 90;
+  project.hardware.echo = { delay: 5, feedback: 50, volumeL: 40, volumeR: 40, fir: [96, 16, 8, 4, 2, 1, 0, 0], writeEnabled: true };
+  project.hardware.mainVolumeL = 90;
+  project.hardware.mainVolumeR = 90;
   return project;
 }

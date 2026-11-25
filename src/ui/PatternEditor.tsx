@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { IR } from '../compiler/ir';
 import { newTrack } from '../model/defaults';
 import { FX_LETTERS, hex, noteName } from '../model/notes';
-import { NOTE_CUT, NOTE_OFF, type Cell, type Pattern } from '../model/types';
+import { FX_COLUMNS, NOTE_CUT, NOTE_OFF, type Cell, type Pattern } from '../model/types';
 import { auditionOff, auditionOn, playFromCursor, playPattern, togglePlay } from './actions';
 import {
   backspaceLine,
@@ -23,13 +23,13 @@ import {
 import { clonePatternCells, Field, FIELD_COUNT, store, updatePattern, useStore } from './store';
 import { measureChar, prepareCanvas, theme } from './theme';
 
-/** Characters per note column: "C-4 7F 40 0 U08" plus a gap. */
-const COL_CHARS = 16;
+/** Characters per note column: "C-4 7F 40 0 U08 V23" plus a gap. */
+const COL_CHARS = 20;
 const GUTTER_CHARS = 4;
 const HEADER_H = 46;
 /** Character offset of each field inside a note column. */
-const FIELD_X = [0, 4, 5, 7, 8, 10, 12, 13, 14];
-const FIELD_W = [3, 1, 1, 1, 1, 1, 1, 1, 1];
+const FIELD_X = [0, 4, 5, 7, 8, 10, 12, 13, 14, 16, 17, 18];
+const FIELD_W = [3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
 
 function trackChars(cols: number): number {
   return cols * COL_CHARS + 1;
@@ -269,8 +269,11 @@ function drawCell(ctx: CanvasRenderingContext2D, x: number, cy: number, cw: numb
   else put('..', theme.empty, 7);
   if (cell?.delay !== undefined && cell.delay > 0) put(hex(cell.delay, 1), theme.delay, 10);
   else put('.', theme.empty, 10);
-  if (cell?.fx) put(FX_LETTERS[cell.fx.type] + hex(cell.fx.value, 2), theme.fx, 12);
-  else put('...', theme.empty, 12);
+  for (let i = 0; i < FX_COLUMNS; i++) {
+    const fx = cell?.fx?.[i];
+    if (fx) put(FX_LETTERS[fx.type] + hex(fx.value, 2), theme.fx, 12 + i * 4);
+    else put('...', theme.empty, 12 + i * 4);
+  }
 }
 
 // ------------------------------------------------------------------ keyboard

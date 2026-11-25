@@ -51,15 +51,19 @@ export type VoiceEvent =
   | (EventBase & { type: 'setPitch'; pitch: number; clamped?: boolean })
   | (EventBase & { type: 'setVolume'; volL: number; volR: number })
   | (EventBase & { type: 'setEnvelope'; envelope: DspEnvelope })
-  /** Reserved: the compiler does not emit these yet, and the DSP model ignores them. */
-  | (EventBase & { type: 'noise'; enabled: boolean; clock: number })
-  /** Reserved: pitch modulation of this voice by the previous voice's output. */
+  /** Noise on/off for this voice (NON). The noise clock itself is global: see 'noiseClock'. */
+  | (EventBase & { type: 'noise'; enabled: boolean })
+  /** Pitch modulation of this voice by the previous voice's output (PMON). */
   | (EventBase & { type: 'pitchMod'; enabled: boolean });
 
 export type GlobalEvent =
   | { tick: number; type: 'tempo'; bpm: number }
   | { tick: number; type: 'echo'; params: EchoParams }
-  | { tick: number; type: 'mainVolume'; volL: number; volR: number };
+  | { tick: number; type: 'mainVolume'; volL: number; volR: number }
+  /** The global noise clock (FLG bits 0-4), 0..31. */
+  | { tick: number; type: 'noiseClock'; clock: number }
+  /** Echo buffer writes on/off (FLG bit 5). */
+  | { tick: number; type: 'echoWrite'; enabled: boolean };
 
 export type DiagnosticKind =
   | 'voiceStolen'
@@ -101,6 +105,8 @@ export interface AramEstimate {
 export interface IR {
   timing: { bpm: number; linesPerBeat: number; ticksPerLine: number };
   totalTicks: number;
+  /** Tick where playback continues after the end of the song (the order list's loop point). */
+  loopTick: number;
   /** Exactly 8 lanes; reserved SFX voices stay empty. */
   voices: VoiceEvent[][];
   global: GlobalEvent[];

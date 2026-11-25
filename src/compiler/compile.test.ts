@@ -275,19 +275,33 @@ describe('pitch and zones', () => {
 
 describe('effects', () => {
   it('slideUp moves the pitch value/16 semitones over one line', () => {
-    const ir = compileSong(fixture([{ device: device('p', 'poly'), cells: [[0, 0, { note: 60 }], [1, 0, { fx: { type: 'slideUp', value: 0x10 } }]] }]));
+    const ir = compileSong(fixture([{ device: device('p', 'poly'), cells: [[0, 0, { note: 60 }], [1, 0, { fx: [{ type: 'slideUp', value: 0x10 }] }]] }]));
     const last = ir.voices[0].filter((e) => e.type === 'setPitch').pop() as { pitch: number; auto?: boolean };
     expect(last.pitch).toBe(Math.round(0x1000 * 2 ** (1 / 12)));
     expect(last.auto).toBe(true);
   });
 
+  it('both effect columns apply on the same line', () => {
+    const ir = compileSong(
+      fixture([{ device: device('p', 'poly'), cells: [[0, 0, { note: 60 }], [1, 0, { fx: [{ type: 'slideUp', value: 0x10 }, { type: 'volSlide', value: 0x02 }] }]] }]),
+    );
+    const lane = ir.voices[0];
+    expect(lane.some((e) => e.type === 'setPitch')).toBe(true);
+    expect(lane.some((e) => e.type === 'setVolume')).toBe(true);
+  });
+
+  it('an empty first effect column does not hide the second', () => {
+    const ir = compileSong(fixture([{ device: device('p', 'poly'), cells: [[0, 0, { note: 60, fx: [null, { type: 'cut', value: 2 }] }]] }]));
+    expect(ir.voices[0].find((e) => e.type === 'keyOff')?.tick).toBe(2);
+  });
+
   it('cut releases after n ticks', () => {
-    const ir = compileSong(fixture([{ device: device('p', 'poly'), cells: [[0, 0, { note: 60, fx: { type: 'cut', value: 3 } }]] }]));
+    const ir = compileSong(fixture([{ device: device('p', 'poly'), cells: [[0, 0, { note: 60, fx: [{ type: 'cut', value: 3 }] }]] }]));
     expect(ir.voices[0].find((e) => e.type === 'keyOff')?.tick).toBe(3);
   });
 
   it('retrig re-keys the note on the same voice', () => {
-    const ir = compileSong(fixture([{ device: device('p', 'poly'), cells: [[0, 0, { note: 60, fx: { type: 'retrig', value: 2 } }]] }]));
+    const ir = compileSong(fixture([{ device: device('p', 'poly'), cells: [[0, 0, { note: 60, fx: [{ type: 'retrig', value: 2 }] }]] }]));
     expect(keyOns(ir).map((k) => [k.voice, k.tick])).toEqual([
       [0, 0],
       [0, 2],

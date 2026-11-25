@@ -166,7 +166,7 @@ function DeviceEditor({ device }: { device: Device }) {
           <input
             type="checkbox"
             checked={!!device.vibrato}
-            onChange={(e) => set({ vibrato: e.target.checked ? { depth: 0.2, rate: 24, delay: 12 } : null }, 'vib')}
+            onChange={(e) => set({ vibrato: e.target.checked ? { depth: 0.2, rate: 24, delay: 12, fadeIn: 0 } : null }, 'vib')}
           />{' '}
           Vibrato
         </legend>

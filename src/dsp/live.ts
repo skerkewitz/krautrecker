@@ -3,6 +3,7 @@ import { VoiceAllocator } from '../compiler/allocate';
 import { TrackProcessor, type ExpandContext, type LogicalNote, type SongPattern } from '../compiler/expand';
 import { selectZone } from '../compiler/instrument';
 import { VOICE_COUNT } from '../compiler/ir';
+import { TRACK_DEFAULTS } from '../model/defaults';
 import { NOTE_OFF, type Cell, type Device, type DeviceMode, type EchoSettings, type Project, type Sample, type Timing, type Track } from '../model/types';
 import type { SDsp } from './sdsp';
 import { applyVoiceEvent } from './sequencer';
@@ -29,7 +30,8 @@ export interface LiveSetup {
   timing: Timing;
   seed: number;
   echo: EchoSettings;
-  mainVolume: number;
+  mainVolumeL: number;
+  mainVolumeR: number;
 }
 
 export function liveSetupFor(project: Project): LiveSetup {
@@ -42,7 +44,8 @@ export function liveSetupFor(project: Project): LiveSetup {
     timing: project.timing,
     seed: project.seed,
     echo: project.hardware.echo,
-    mainVolume: project.hardware.mainVolume,
+    mainVolumeL: project.hardware.mainVolumeL,
+    mainVolumeR: project.hardware.mainVolumeR,
   };
 }
 
@@ -94,7 +97,7 @@ export class LivePlayer {
     };
     // Track processors keep a reference to the context, so update it in place.
     if (this.ctx) Object.assign(this.ctx, fields);
-    else this.ctx = { ...fields, notes: [], diagnostics: [], diagKeys: new Set(), nextId: 0 };
+    else this.ctx = { ...fields, notes: [], globalEvents: [], diagnostics: [], diagKeys: new Set(), nextId: 0 };
 
     const releaseTicks = Math.max(1, Math.ceil(256 / this.samplesPerTick));
     if (releaseTicks !== this.releaseTicks) {
@@ -109,7 +112,7 @@ export class LivePlayer {
       else lt.proc.refreshDevice();
     }
     this.dsp.setEcho({ ...s.echo, fir: s.echo.fir.slice(0, 8) });
-    this.dsp.setMainVolume(s.mainVolume, s.mainVolume);
+    this.dsp.setMainVolume(s.mainVolumeL, s.mainVolumeR);
   }
 
   noteOn(deviceId: string, note: number, velocity: number): void {
@@ -194,7 +197,7 @@ export class LivePlayer {
   /** A one-track pseudo pattern, so the processor's source references stay well-formed. */
   private liveSong(track: number, deviceId: string | null): SongPattern {
     const tracks: Track[] = [];
-    tracks[track] = { deviceId, noteColumns: COLUMNS, cells: [] };
+    tracks[track] = { deviceId, noteColumns: COLUMNS, ...TRACK_DEFAULTS, cells: [] };
     return { orderIndex: -1, pattern: { id: 'live', name: 'Live', lines: 1, tracks }, startTick: this.tick };
   }
 
@@ -240,6 +243,7 @@ export class LivePlayer {
     // Notes that ended (released, replaced or finished) send nothing more.
     this.sounding = this.sounding.filter((s) => s.note.heldEnd === Infinity || s.cursor < s.note.events.length);
     ctx.diagnostics.length = 0;
+    ctx.globalEvents.length = 0;
     if (t % 64 === 0) this.alloc.prune();
   }
 }

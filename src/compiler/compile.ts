@@ -62,6 +62,7 @@ export function compileSong(project: Project, options: CompileOptions = {}): IR 
     built,
     slots,
     notes: [],
+    globalEvents: [],
     diagnostics,
     diagKeys: new Set(),
     nextId: 0,
@@ -105,8 +106,11 @@ export function compileSong(project: Project, options: CompileOptions = {}): IR 
       type: 'echo',
       params: { delay: echo.delay, feedback: echo.feedback, volumeL: echo.volumeL, volumeR: echo.volumeR, fir: echo.fir.slice(0, 8) },
     },
-    { tick: 0, type: 'mainVolume', volL: hardware.mainVolume, volR: hardware.mainVolume },
+    { tick: 0, type: 'mainVolume', volL: hardware.mainVolumeL, volR: hardware.mainVolumeR },
   ];
+  if (!echo.writeEnabled) global.push({ tick: 0, type: 'echoWrite', enabled: false });
+  // Events from global effects, in tick order (stable: same-tick events keep their track order).
+  global.push(...ctx.globalEvents.map((e, i) => ({ e, i })).sort((a, b) => a.e.tick - b.e.tick || a.i - b.i).map((x) => x.e));
 
   const aram = estimateAram(project, built, alloc.lanes, global.length);
   if (aram.total > aram.capacity) {
@@ -123,6 +127,7 @@ export function compileSong(project: Project, options: CompileOptions = {}): IR 
   return {
     timing: { bpm: timing.bpm, linesPerBeat: timing.linesPerBeat, ticksPerLine: tpl },
     totalTicks,
+    loopTick: 0,
     voices: alloc.lanes,
     global,
     reservedVoices,

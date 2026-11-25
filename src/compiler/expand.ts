@@ -4,7 +4,7 @@ import { NOTE_CUT, NOTE_OFF } from '../model/types';
 import { noteName } from '../model/notes';
 import { hashString, mulberry32 } from '../util/prng';
 import { pitchFor, playLengthSamples, selectZone, stereoVolume, toDspEnvelope, zoneRoot } from './instrument';
-import type { Diagnostic, KeyOnEvent, SourceRef, VoiceEvent } from './ir';
+import type { Diagnostic, GlobalEvent, KeyOnEvent, SourceRef, VoiceEvent } from './ir';
 
 /**
  * Stages 1 and 2 of the compiler.
@@ -42,7 +42,7 @@ export function parsePattern(pattern: Pattern, tpl: number): Entry[][] {
       for (let column = 0; column < track.noteColumns; column++) {
         const cell = row[column];
         if (!cell) continue;
-        if (cell.fx) entries.push({ offset: line * tpl, line, column, kind: 'fx', cell });
+        if (cell.fx?.some((e) => e)) entries.push({ offset: line * tpl, line, column, kind: 'fx', cell });
         if (cell.note !== undefined || cell.volume !== undefined || cell.pan !== undefined) {
           const delay = Math.max(0, Math.min(tpl - 1, cell.delay ?? 0));
           entries.push({ offset: line * tpl + delay, line, column, kind: 'cell', cell });
@@ -92,6 +92,8 @@ export interface ExpandContext {
   built: Map<string, BuiltSample>;
   slots: Map<string, number>;
   notes: LogicalNote[];
+  /** Song-wide events produced by global effects (tempo, main volume, echo, noise clock). */
+  globalEvents: GlobalEvent[];
   diagnostics: Diagnostic[];
   diagKeys: Set<string>;
   nextId: number;
@@ -177,9 +179,9 @@ export class TrackProcessor {
   private colActive: (Active | null)[] = [];
   /** The single note of mono/legato/arp devices. */
   private solo: Active | null = null;
-  /** Per column: the effect for the current line. */
-  private colFx: (Effect | null)[] = [];
-  private fxTargets: Map<Active, Effect> = new Map();
+  /** Per column: the effects of the current line (one per effect column that is set). */
+  private colFx: (Effect[] | null)[] = [];
+  private fxTargets: Map<Active, Effect[]> = new Map();
   // Arp state.
   private held: (HeldKey | null)[] = [];
   private heldOrder = 0;
@@ -238,7 +240,7 @@ export class TrackProcessor {
   entry(en: Entry, tick: number): void {
     const source = this.src(en.line, en.column);
     if (en.kind === 'fx') {
-      this.colFx[en.column] = en.cell.fx ?? null;
+      this.colFx[en.column] = (en.cell.fx ?? []).filter((e): e is Effect => !!e);
       return;
     }
     const cell = en.cell;
@@ -255,7 +257,8 @@ export class TrackProcessor {
       }
       return;
     }
-    const fx = this.colFx[en.column] ?? null;
+    // Only portamento changes how a note entry behaves; every other effect acts per tick.
+    const fx = this.colFx[en.column]?.find((e) => e.type === 'porta') ?? null;
     switch (device.mode) {
       case 'poly':
       case 'drum':
@@ -384,29 +387,36 @@ export class TrackProcessor {
     this.fxTargets.clear();
     for (let c = 0; c < this.colFx.length; c++) {
       const fx = this.colFx[c];
-      if (!fx) continue;
+      if (!fx || fx.length === 0) continue;
       const target = device && (device.mode === 'poly' || device.mode === 'drum') ? this.colActive[c] : this.solo;
-      if (target && !this.fxTargets.has(target)) this.fxTargets.set(target, fx);
+      if (!target) continue;
+      const list = this.fxTargets.get(target);
+      if (list) list.push(...fx);
+      else this.fxTargets.set(target, [...fx]);
     }
     for (const a of [...this.actives]) {
-      const fx = this.fxTargets.get(a) ?? null;
-      this.applyFx(a, fx, tick, lineTick);
+      this.applyFx(a, this.fxTargets.get(a) ?? [], tick, lineTick);
     }
     for (const a of this.actives) this.emit(a, tick);
   }
 
-  private applyFx(a: Active, fx: Effect | null, tick: number, lineTick: number): void {
-    const tpl = this.ctx.tpl;
+  /** Applies the current line's effects (from all effect columns) to one note, for one tick. */
+  private applyFx(a: Active, fxs: Effect[], tick: number, lineTick: number): void {
     if (a.glide) {
       const p = Math.min(1, (tick - a.glide.start) / a.glide.len);
       a.pitch = a.glide.from + (a.glide.to - a.glide.from) * p;
       if (p >= 1) a.glide = null;
     }
-    if (!fx || fx.type !== 'vibrato') {
+    if (!fxs.some((fx) => fx.type === 'vibrato')) {
       a.vibFx = 0;
       a.vibPhase = 0;
     }
-    if (!fx) return;
+    for (const fx of fxs) this.applyEffect(a, fx, tick, lineTick);
+  }
+
+  /** One effect on one note for one tick. Effect types without a case here are not implemented yet. */
+  private applyEffect(a: Active, fx: Effect, tick: number, lineTick: number): void {
+    const tpl = this.ctx.tpl;
     const v = fx.value;
     switch (fx.type) {
       case 'slideUp':

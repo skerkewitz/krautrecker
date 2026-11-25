@@ -20,8 +20,11 @@ export function HardwarePanel() {
         <Row label="SFX voices" title="Voices reserved for sound effects (taken from voice 7 downwards). The music never uses them.">
           <Slider value={hw.reservedSfxVoices} min={0} max={7} onChange={(v) => set({ reservedSfxVoices: v }, 'sfx')} />
         </Row>
-        <Row label="Main volume">
-          <Slider value={hw.mainVolume} min={0} max={127} onChange={(v) => set({ mainVolume: v }, 'mvol')} />
+        <Row label="Main vol L">
+          <Slider value={hw.mainVolumeL} min={-128} max={127} onChange={(v) => set({ mainVolumeL: v }, 'mvoll')} />
+        </Row>
+        <Row label="Main vol R" title="Negative values invert the phase of that side.">
+          <Slider value={hw.mainVolumeR} min={-128} max={127} onChange={(v) => set({ mainVolumeR: v }, 'mvolr')} />
         </Row>
         <Row label="Driver reserve" title="ARAM assumed for the sound driver code until Milestone 2 picks a driver.">
           <NumberInput value={hw.driverReserve} min={0} max={32768} step={256} onChange={(v) => set({ driverReserve: v }, 'drv')} width={80} />

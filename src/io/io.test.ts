@@ -25,6 +25,33 @@ describe('project file', () => {
     expect(parseProject(JSON.stringify(raw)).hardware.driverReserve).toBe(8192);
   });
 
+  it('migrates a schema 1 project: effect lists, main volume L/R, neutral new fields, same IR', () => {
+    // Build what a version-1 file looked like from the current demo.
+    const v2 = demoProject();
+    const v1 = JSON.parse(serializeProject(v2));
+    v1.schemaVersion = 1;
+    v1.hardware.mainVolume = v1.hardware.mainVolumeL;
+    delete v1.hardware.mainVolumeL;
+    delete v1.hardware.mainVolumeR;
+    delete v1.hardware.echo.writeEnabled;
+    delete v1.loopOrderIndex;
+    for (const d of v1.devices) {
+      for (const k of ['gain', 'release', 'tremolo', 'fineTune', 'surround', 'pitchModSource']) delete d[k];
+      if (d.vibrato) delete d.vibrato.fadeIn;
+    }
+    for (const pat of v1.patterns) {
+      for (const t of pat.tracks) {
+        delete t.volume;
+        delete t.pan;
+        delete t.transpose;
+        for (const row of t.cells) for (const cell of row) if (cell?.fx) cell.fx = cell.fx[0];
+      }
+    }
+    const migrated = parseProject(JSON.stringify(v1));
+    expect(migrated).toEqual(v2);
+    expect(JSON.stringify(compileSong(migrated))).toBe(JSON.stringify(compileSong(v2)));
+  });
+
   it('stores PCM losslessly as base64', () => {
     const pcm = Int16Array.from([0, 1, -1, 32767, -32768, 12345, -54]);
     expect(Array.from(base64ToInt16(int16ToBase64(pcm)))).toEqual(Array.from(pcm));
