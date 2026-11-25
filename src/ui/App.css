@@ -730,6 +730,10 @@ legend {
   background: #262c38;
   box-shadow: inset 2px 0 var(--accent);
 }
+.order-item .loop-mark {
+  margin-left: 6px;
+  color: var(--accent);
+}
 .order-list .button-row {
   padding: 4px 8px;
   gap: 4px;

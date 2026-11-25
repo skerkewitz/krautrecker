@@ -4,6 +4,7 @@ import { NOTE_CUT, NOTE_OFF } from '../model/types';
 import { noteName } from '../model/notes';
 import { hashString, mulberry32 } from '../util/prng';
 import { pitchFor, playLengthSamples, selectZone, stereoVolume, toDspEnvelope, zoneRoot } from './instrument';
+import { collectGlobalFx, type GlobalFxCommand } from './globalFx';
 import type { Diagnostic, GlobalEvent, KeyOnEvent, SourceRef, VoiceEvent } from './ir';
 
 /**
@@ -94,6 +95,8 @@ export interface ExpandContext {
   notes: LogicalNote[];
   /** Song-wide events produced by global effects (tempo, main volume, echo, noise clock). */
   globalEvents: GlobalEvent[];
+  /** Global effects as written (see globalFx.ts); compile.ts resolves them across all tracks. */
+  globalFx?: GlobalFxCommand[];
   diagnostics: Diagnostic[];
   diagKeys: Set<string>;
   nextId: number;
@@ -372,6 +375,8 @@ export class TrackProcessor {
 
   /** Per-tick work after this tick's cells: arpeggiator, effects, then emit events. */
   tick(tick: number, lineTick: number): void {
+    // Global effects act whether or not a note is sounding.
+    if (lineTick === 0 && this.ctx.globalFx) collectGlobalFx(this.ctx.globalFx, this.colFx, tick);
     // A one-shot sample that has finished needs no further updates: stop tracking it, so drum
     // hits do not pile up for the rest of the song.
     for (const a of [...this.actives]) {

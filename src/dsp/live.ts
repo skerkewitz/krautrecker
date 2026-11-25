@@ -112,6 +112,7 @@ export class LivePlayer {
       else lt.proc.refreshDevice();
     }
     this.dsp.setEcho({ ...s.echo, fir: s.echo.fir.slice(0, 8) });
+    this.dsp.setEchoWrite(s.echo.writeEnabled !== false);
     this.dsp.setMainVolume(s.mainVolumeL, s.mainVolumeR);
   }
 

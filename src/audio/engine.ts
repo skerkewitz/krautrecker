@@ -80,7 +80,8 @@ export class AudioEngine {
     this.send({ type: 'ir', ir });
   }
 
-  async play(ir: IR, from: number, loopStart: number, loop: boolean): Promise<void> {
+  /** `loopStart` null loops to the IR's loop point, also after the IR is recompiled. */
+  async play(ir: IR, from: number, loopStart: number | null, loop: boolean): Promise<void> {
     await this.ensureStarted();
     this.lastIR = ir;
     this.send({ type: 'ir', ir });
