@@ -12,13 +12,17 @@ type TickEvent = { global: false; voice: number; ev: VoiceEvent } | { global: tr
 
 export class Sequencer {
   private byTick: TickEvent[][] = [];
+  private global: GlobalEvent[] = [];
   private totalTicks = 0;
+  private timing: IR['timing'] = { bpm: 125, linesPerBeat: 4, ticksPerLine: 6 };
+  private irLoopTick = 0;
   private samplesPerTick = 1;
   private frac = 0;
   private samplesLeft = 0;
   playing = false;
   tick = 0;
-  private loopStart = 0;
+  /** null = the loaded IR's loop point (follows recompiles while playing). */
+  private loopStart: number | null = 0;
   private loop = false;
 
   constructor(readonly dsp: SDsp) {}
@@ -30,14 +34,22 @@ export class Sequencer {
       for (const ev of lane) byTick[ev.tick]?.push({ global: false, voice, ev });
     });
     this.byTick = byTick;
+    this.global = ir.global;
     this.totalTicks = ir.totalTicks;
-    const t = ir.timing;
-    this.samplesPerTick = (DSP_RATE * 60) / (t.bpm * t.linesPerBeat * t.ticksPerLine);
-    // Global settings (echo, volume) apply right away, even mid-song.
-    for (const g of ir.global) if (g.tick === 0) this.applyGlobal(g);
+    this.timing = ir.timing;
+    this.irLoopTick = ir.loopTick;
+    this.samplesPerTick = this.samplesPerTickAt(ir.timing.bpm);
+    // Global settings apply right away: while playing, the song's state at the play position
+    // (an edit must not reset a tempo change); otherwise the initial state.
+    if (this.playing) this.applyGlobalStateAt(this.tick);
+    else for (const g of ir.global) if (g.tick === 0) this.applyGlobal(g);
   }
 
-  play(fromTick: number, loopStart: number, loop: boolean): void {
+  /**
+   * Starts playback at `fromTick`. After the end, a looping song continues at `loopStart`
+   * (null = the IR's loop point).
+   */
+  play(fromTick: number, loopStart: number | null, loop: boolean): void {
     this.dsp.silence();
     this.tick = Math.max(0, Math.min(fromTick, this.totalTicks));
     this.loopStart = loopStart;
@@ -45,8 +57,26 @@ export class Sequencer {
     this.frac = 0;
     this.samplesLeft = 0;
     this.playing = this.totalTicks > 0;
-    // Tempo and echo come from tick 0; when starting later, still apply them.
-    for (const e of this.byTick[0] ?? []) if (e.global) this.applyGlobal(e.ev);
+    this.applyGlobalStateAt(this.tick);
+  }
+
+  private samplesPerTickAt(bpm: number): number {
+    const t = this.timing;
+    return (DSP_RATE * 60) / (bpm * t.linesPerBeat * t.ticksPerLine);
+  }
+
+  /**
+   * Brings tempo, volumes and echo to the state the song has just before `tick`, by replaying
+   * the last global event of each type before it. Used when playback starts or loops mid-song;
+   * the events on `tick` itself then fire as usual.
+   */
+  private applyGlobalStateAt(tick: number): void {
+    // Defaults for state the IR only mentions when it differs from them.
+    this.samplesPerTick = this.samplesPerTickAt(this.timing.bpm);
+    this.dsp.setEchoWrite(true);
+    const last = new Map<GlobalEvent['type'], GlobalEvent>();
+    for (const g of this.global) if (g.tick < tick) last.set(g.type, g);
+    for (const g of last.values()) this.applyGlobal(g);
   }
 
   stop(): void {
@@ -57,12 +87,17 @@ export class Sequencer {
   private applyGlobal(g: GlobalEvent): void {
     switch (g.type) {
       case 'tempo':
+        // The IR stays tick-based; only the length of a tick changes.
+        this.samplesPerTick = this.samplesPerTickAt(g.bpm);
         break;
       case 'echo':
         this.dsp.setEcho(g.params);
         break;
       case 'mainVolume':
         this.dsp.setMainVolume(g.volL, g.volR);
+        break;
+      case 'echoWrite':
+        this.dsp.setEchoWrite(g.enabled);
         break;
     }
   }
@@ -71,7 +106,8 @@ export class Sequencer {
     if (this.tick >= this.totalTicks) {
       if (this.loop && this.totalTicks > 0) {
         this.dsp.silence();
-        this.tick = this.loopStart;
+        this.tick = Math.max(0, Math.min(this.loopStart ?? this.irLoopTick, this.totalTicks - 1));
+        this.applyGlobalStateAt(this.tick);
       } else {
         this.stop();
         return;

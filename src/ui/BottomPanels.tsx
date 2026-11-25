@@ -4,6 +4,7 @@ import { emptyCells, newPattern, newTrack } from '../model/defaults';
 import { hex } from '../model/notes';
 import type { Pattern } from '../model/types';
 import { newId } from '../util/base64';
+import { loopAfterInsert, loopAfterRemove, loopAfterSwap } from './orderEdit';
 import { store, useStore } from './store';
 import { prepareCanvas, theme } from './theme';
 
@@ -14,8 +15,10 @@ export function OrderList() {
   const ui = useStore((s) => s.ui);
   const names = new Map(project.patterns.map((p) => [p.id, p.name]));
   const select = (i: number) => store.setUi({ orderIndex: i, currentPatternId: project.order[i], selection: null });
-  const setOrder = (order: string[], sel = ui.orderIndex) => {
-    store.update((p) => ({ ...p, order }));
+  // Shown where the compiler puts it: invalid values clamp into the order list.
+  const loop = Math.max(0, Math.min(project.order.length - 1, Math.round(project.loopOrderIndex) || 0));
+  const setOrder = (order: string[], sel: number, loopOrderIndex: number) => {
+    store.update((p) => ({ ...p, order, loopOrderIndex }));
     if (order[sel]) store.setUi({ orderIndex: sel, currentPatternId: order[sel] });
   };
   const move = (d: number) => {
@@ -24,7 +27,7 @@ export function OrderList() {
     if (i < 0 || j < 0 || j >= project.order.length) return;
     const order = project.order.slice();
     [order[i], order[j]] = [order[j], order[i]];
-    setOrder(order, j);
+    setOrder(order, j, loopAfterSwap(loop, i, j));
   };
   const addPattern = (clone: boolean) => {
     const cur = project.patterns.find((p) => p.id === ui.currentPatternId);
@@ -36,14 +39,19 @@ export function OrderList() {
       pat = newPattern(`Pattern ${project.patterns.length + 1}`, lines, tracks);
     }
     const at = ui.orderIndex + 1;
-    store.update((p) => ({ ...p, patterns: [...p.patterns, pat], order: [...p.order.slice(0, at), pat.id, ...p.order.slice(at)] }));
+    store.update((p) => ({ ...p, patterns: [...p.patterns, pat], order: [...p.order.slice(0, at), pat.id, ...p.order.slice(at)], loopOrderIndex: loopAfterInsert(p.loopOrderIndex, at) }));
     store.setUi({ currentPatternId: pat.id, orderIndex: at });
   };
   const deletePattern = () => {
     const id = ui.currentPatternId;
     if (project.patterns.length <= 1) return;
     if (!confirm(`Delete pattern "${names.get(id)}" and remove it from the song?`)) return;
-    store.update((p) => ({ ...p, patterns: p.patterns.filter((x) => x.id !== id), order: p.order.filter((x) => x !== id) }));
+    store.update((p) => ({
+      ...p,
+      patterns: p.patterns.filter((x) => x.id !== id),
+      order: p.order.filter((x) => x !== id),
+      loopOrderIndex: loopAfterRemove(p.loopOrderIndex, p.order.map((x) => x !== id)),
+    }));
   };
 
   return (
@@ -52,14 +60,32 @@ export function OrderList() {
         {project.order.map((id, i) => (
           <div key={i} className={`order-item${i === ui.orderIndex ? ' active' : ''}`} onClick={() => select(i)}>
             <span className="idx">{hex(i, 2)}</span> {names.get(id) ?? '?'}
+            {i === loop && (
+              <span className="loop-mark" title="Loop point: after the last entry, the song continues here">
+                ↻
+              </span>
+            )}
           </div>
         ))}
       </div>
       <div className="button-row">
-        <button title="Insert the current pattern after the selection" onClick={() => setOrder([...project.order.slice(0, ui.orderIndex + 1), ui.currentPatternId, ...project.order.slice(ui.orderIndex + 1)], ui.orderIndex + 1)}>
+        <button
+          title="Insert the current pattern after the selection"
+          onClick={() => setOrder([...project.order.slice(0, ui.orderIndex + 1), ui.currentPatternId, ...project.order.slice(ui.orderIndex + 1)], ui.orderIndex + 1, loopAfterInsert(loop, ui.orderIndex + 1))}
+        >
           + Insert
         </button>
-        <button title="Remove the selected entry" disabled={ui.orderIndex < 0} onClick={() => setOrder(project.order.filter((_, i) => i !== ui.orderIndex), Math.max(0, ui.orderIndex - 1))}>
+        <button
+          title="Remove the selected entry"
+          disabled={ui.orderIndex < 0}
+          onClick={() =>
+            setOrder(
+              project.order.filter((_, i) => i !== ui.orderIndex),
+              Math.max(0, ui.orderIndex - 1),
+              loopAfterRemove(loop, project.order.map((_, i) => i !== ui.orderIndex)),
+            )
+          }
+        >
           − Remove
         </button>
         <button title="Move up" onClick={() => move(-1)}>
@@ -67,6 +93,13 @@ export function OrderList() {
         </button>
         <button title="Move down" onClick={() => move(1)}>
           ↓
+        </button>
+        <button
+          title="Loop point: after the last entry, the song continues at the selected entry"
+          disabled={ui.orderIndex < 0 || ui.orderIndex === loop}
+          onClick={() => store.update((p) => ({ ...p, loopOrderIndex: ui.orderIndex }))}
+        >
+          ↻ Loop
         </button>
       </div>
       <div className="button-row">

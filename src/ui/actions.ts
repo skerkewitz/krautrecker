@@ -24,7 +24,8 @@ export async function playSong(fromTick = 0): Promise<void> {
   syncEngine();
   const s = store.getState();
   store.setUi({ playing: true, playMode: 'song', playTick: fromTick });
-  await engine.play(store.songIR(), fromTick, 0, s.ui.loop);
+  // The song loops to its loop point (the order list's loop entry).
+  await engine.play(store.songIR(), fromTick, null, s.ui.loop);
 }
 
 export async function playPattern(fromLine = 0): Promise<void> {

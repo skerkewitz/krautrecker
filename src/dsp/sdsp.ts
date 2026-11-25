@@ -130,6 +130,8 @@ export class SDsp {
   private echoBuf = new Int16Array(2);
   private echoFrames = 1;
   private echoPos = 0;
+  /** FLG bit 5 clear. When false the buffer is not written, so it keeps repeating its content. */
+  echoWrite = true;
   private histL = new Int32Array(8);
   private histR = new Int32Array(8);
 
@@ -206,6 +208,10 @@ export class SDsp {
       this.histR.fill(0);
     }
     this.echoParams = { ...p, fir: p.fir.slice(0, 8) };
+  }
+
+  setEchoWrite(enabled: boolean): void {
+    this.echoWrite = enabled;
   }
 
   /** True while any voice is sounding. */
@@ -341,8 +347,10 @@ export class SDsp {
       const outLeft = clamp16(((mainL * this.mainVolL) >> 7) + ((firL * ep.volumeL) >> 7));
       const outRight = clamp16(((mainR * this.mainVolR) >> 7) + ((firR * ep.volumeR) >> 7));
 
-      this.echoBuf[pos] = clamp16(echoL + ((firL * ep.feedback) >> 7)) & ~1;
-      this.echoBuf[pos + 1] = clamp16(echoR + ((firR * ep.feedback) >> 7)) & ~1;
+      if (this.echoWrite) {
+        this.echoBuf[pos] = clamp16(echoL + ((firL * ep.feedback) >> 7)) & ~1;
+        this.echoBuf[pos + 1] = clamp16(echoR + ((firR * ep.feedback) >> 7)) & ~1;
+      }
       if (++this.echoPos >= this.echoFrames) this.echoPos = 0;
 
       outL[offset + n] = outLeft / 32768;

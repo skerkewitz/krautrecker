@@ -44,6 +44,9 @@ export function HardwarePanel() {
           <Row label="Volume R">
             <Slider value={hw.echo.volumeR} min={-128} max={127} onChange={(v) => setEcho({ volumeR: v }, 'evr')} />
           </Row>
+          <Row label="Echo writes" title="FLG bit 5. Off freezes the echo buffer: it keeps repeating what it holds (the Z effect switches this during the song).">
+            <input type="checkbox" checked={hw.echo.writeEnabled} onChange={(e) => setEcho({ writeEnabled: e.target.checked }, 'ewr')} />
+          </Row>
           <Row label="FIR preset">
             <select
               value={Object.entries(FIR_PRESETS).find(([, v]) => v.join() === hw.echo.fir.join())?.[0] ?? ''}

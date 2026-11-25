@@ -58,8 +58,9 @@ export type VoiceEvent =
 
 export type GlobalEvent =
   | { tick: number; type: 'tempo'; bpm: number }
-  | { tick: number; type: 'echo'; params: EchoParams }
-  | { tick: number; type: 'mainVolume'; volL: number; volR: number }
+  /** `auto`: a per-tick slide step (see EventBase.auto); not counted as song data. */
+  | { tick: number; type: 'echo'; params: EchoParams; auto?: boolean }
+  | { tick: number; type: 'mainVolume'; volL: number; volR: number; auto?: boolean }
   /** The global noise clock (FLG bits 0-4), 0..31. */
   | { tick: number; type: 'noiseClock'; clock: number }
   /** Echo buffer writes on/off (FLG bit 5). */

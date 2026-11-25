@@ -3,6 +3,7 @@ import { DSP_RATE } from '../dsp/tables';
 import type { Pattern, PatternId, Project } from '../model/types';
 import { allocateVoices, describeNote } from './allocate';
 import { expandTrack, type ExpandContext, type SongPattern } from './expand';
+import { isAutoGlobal, resolveGlobalFx, type GlobalFxCommand } from './globalFx';
 import { ARAM_CAPACITY, VOICE_COUNT, type AramEstimate, type Diagnostic, type IR, type LineInfo } from './ir';
 
 export interface CompileOptions {
@@ -51,8 +52,10 @@ export function compileSong(project: Project, options: CompileOptions = {}): IR 
     tick += pattern.lines * tpl;
   });
   const totalTicks = tick;
+  const loopTick = options.order ? 0 : loopTickFor(project, song);
 
   // Stage 1 + 2: device logic per track.
+  const globalFx: GlobalFxCommand[] = [];
   const ctx: ExpandContext = {
     project,
     tpl,
@@ -63,12 +66,14 @@ export function compileSong(project: Project, options: CompileOptions = {}): IR 
     slots,
     notes: [],
     globalEvents: [],
+    globalFx,
     diagnostics,
     diagKeys: new Set(),
     nextId: 0,
   };
   const trackCount = song.reduce((m, sp) => Math.max(m, sp.pattern.tracks.length), 0);
   for (let t = 0; t < trackCount; t++) expandTrack(ctx, t, song);
+  ctx.globalEvents.push(...resolveGlobalFx(globalFx, tpl, timing, hardware));
 
   // Stage 3: voices. Reserved SFX voices are taken from the top (7, 6, ...).
   const reserved = Math.max(0, Math.min(VOICE_COUNT, Math.round(hardware.reservedSfxVoices)));
@@ -112,7 +117,7 @@ export function compileSong(project: Project, options: CompileOptions = {}): IR 
   // Events from global effects, in tick order (stable: same-tick events keep their track order).
   global.push(...ctx.globalEvents.map((e, i) => ({ e, i })).sort((a, b) => a.e.tick - b.e.tick || a.i - b.i).map((x) => x.e));
 
-  const aram = estimateAram(project, built, alloc.lanes, global.length);
+  const aram = estimateAram(project, built, alloc.lanes, global.filter((e) => !isAutoGlobal(e)).length);
   if (aram.total > aram.capacity) {
     diagnostics.push({
       kind: 'aramOverBudget',
@@ -127,7 +132,7 @@ export function compileSong(project: Project, options: CompileOptions = {}): IR 
   return {
     timing: { bpm: timing.bpm, linesPerBeat: timing.linesPerBeat, ticksPerLine: tpl },
     totalTicks,
-    loopTick: 0,
+    loopTick,
     voices: alloc.lanes,
     global,
     reservedVoices,
@@ -137,6 +142,17 @@ export function compileSong(project: Project, options: CompileOptions = {}): IR 
     diagnostics: ordered.map((o) => o.d),
     aram,
   };
+}
+
+/**
+ * The tick where the song continues after its end: the start of the order entry at
+ * `loopOrderIndex`. Invalid values are clamped into the order list; if that entry's pattern is
+ * missing, the next entry that exists is used, and with none the whole song loops.
+ */
+function loopTickFor(project: Project, song: SongPattern[]): number {
+  const raw = Math.round(project.loopOrderIndex);
+  const index = Number.isFinite(raw) ? Math.max(0, Math.min(project.order.length - 1, raw)) : 0;
+  return song.find((sp) => sp.orderIndex >= index)?.startTick ?? 0;
 }
 
 /**

@@ -6,7 +6,8 @@ import type { DspSample } from './sdsp';
 export type ToWorklet =
   | { type: 'samples'; samples: DspSample[] }
   | { type: 'ir'; ir: IR }
-  | { type: 'play'; from: number; loopStart: number; loop: boolean }
+  /** loopStart null = the IR's loop point. */
+  | { type: 'play'; from: number; loopStart: number | null; loop: boolean }
   | { type: 'stop' }
   /** Live play with the device's rules (MIDI, keyboard, zone audition), on its own DSP. */
   | { type: 'liveSetup'; setup: LiveSetup }
