@@ -18,7 +18,7 @@ Think: "Renoise-style instruments and tracks on top, FastTracker 2 / SNES-native
 
 ## 3. Architecture overview
 
-```
+```text
 Project (high-level, JSON)
    │
    │  Compiler (pure, deterministic)
@@ -42,6 +42,7 @@ Later backends (other consoles) should be possible from the same IR, but are out
 All IDs are stable strings. All objects are plain JSON-serializable data.
 
 ### Project
+
 - `schemaVersion: number`
 - `title`, `author`
 - `timing`: `bpm`, `linesPerBeat` (LPB, default 4), `ticksPerLine` (default 6)
@@ -53,7 +54,9 @@ All IDs are stable strings. All objects are plain JSON-serializable data.
 - `seed: number` (for any seeded randomness)
 
 ### Sample
+
 Raw audio, the only thing that costs ARAM.
+
 - `name`
 - `pcm`: original audio, mono, 16-bit, base64 in the project file, plus its original sample rate
 - `targetRate`: resample rate before BRR encoding (default 32000 Hz; lower = smaller, darker)
@@ -62,7 +65,9 @@ Raw audio, the only thing that costs ARAM.
 - `loop`: `{ enabled, start }` (end = sample end). The BRR encoder must align the loop start to a 16-sample block boundary (resample or pad, and report it).
 
 ### Device (the "sampler")
+
 The instrument concept. A track plays exactly one device.
+
 - `name`
 - `zones: Zone[]`: multisample mapping
 - `mode`: one of
@@ -79,6 +84,7 @@ The instrument concept. A track plays exactly one device.
 - `echo: boolean`: route the device's voices to the echo unit
 
 ### Zone
+
 - `sampleId`
 - `keyRange: [lowNote, highNote]`
 - `rootNoteOverride?` (defaults to the sample's `rootNote`)
@@ -89,10 +95,12 @@ The instrument concept. A track plays exactly one device.
 Zone selection: the zone whose range contains the note; if several overlap, the first one in the list wins. If none matches, use the zone with the nearest root note (and emit a warning).
 
 ### Pattern
+
 - `lines: number` (default 64)
 - `tracks: Track[]`
 
 ### Track
+
 - `deviceId`
 - `noteColumns: number` (1–8). More columns allow chords.
 - `cells[line][column]`: `{ note?, volume?, pan?, delay?, fx? }`
@@ -117,6 +125,7 @@ Zone selection: the zone whose range contains the note; if several overlap, the 
 ## 6. Effects (high-level, minimal set for the prototype)
 
 Per cell, at most one `fx` entry:
+
 - `slideUp n` / `slideDown n`: pitch slide (semitones per line, fractional)
 - `porta n`: portamento to note
 - `vibrato depth rate`
@@ -141,14 +150,17 @@ Device-level behavior (arp, choke, legato) is not an effect. It comes from the d
 - The compiler also emits **diagnostics**: voice stolen (which note, by whom), pitch clamped, no matching zone, loop realigned, ARAM over budget.
 
 ### Voice allocation (deterministic)
+
 Processed in tick order. At each tick, the new note requests are sorted by (device priority desc, track index asc, column index asc). For each request:
+
 1. Device-internal rules first (mono/legato reuse their voice; drum choke cuts the same group; a poly device at its `maxVoices` steals its own oldest voice).
 2. Otherwise take a free voice (lowest index first).
 3. Otherwise steal by: lowest priority → voices in release phase → oldest note. Never steal from a higher-priority device. If nothing can be stolen, drop the note and emit a diagnostic.
 
 ## 8. Prototype scope (Milestone 1)
 
-**In scope**
+### In scope
+
 1. **Sample import**: WAV (and anything `decodeAudioData` handles) → mono → resample to `targetRate` → **BRR encode** (choose the best filter/shift per block by minimal error) → BRR decode for playback, so you hear the real BRR artifacts.
 2. **Device editor**: zones (key range, root, fixed pitch), mode (mono, legato, poly, arp, drum), maxVoices, priority, ADSR, volume/pan, echo on/off, choke groups for drums.
 3. **Pattern editor** (canvas grid, tracker-style): tracks with multiple note columns, cursor navigation, note entry via the computer keyboard (FT2 piano layout, two rows, using `KeyboardEvent.code` so it works on QWERTZ and AZERTY alike), octave switch, note off, volume/pan/fx columns, copy/paste of selections, undo/redo.
@@ -160,7 +172,8 @@ Processed in tick order. At each tick, the new note requests are sorted by (devi
 9. **Meters**: voice usage over time (per line), ARAM estimate with breakdown.
 10. **Persistence**: autosave to IndexedDB; export/import the project as a single `.json` file (samples base64-encoded). `schemaVersion` from day one.
 
-**Out of scope (later milestones)**
+### Out of scope (later milestones)
+
 - SPC700 sound driver and `.spc` export (Milestone 2; evaluate existing open-source SNES drivers vs. our own)
 - Running a real SPC700/S-DSP emulator (e.g. compiled to WASM) as a "hardware-exact" player
 - Noise and pitch modulation in the UI
@@ -177,7 +190,8 @@ Processed in tick order. At each tick, the new note requests are sorted by (devi
 - No backend.
 
 Suggested layout:
-```
+
+```text
 src/
   model/      types, schema, migrations, defaults
   compiler/   high-level → IR, voice allocator, diagnostics
@@ -203,7 +217,7 @@ A user can open the site, import a few WAV samples, build a multisampled synth d
 ## 12. Open decisions (defaults chosen, change if needed)
 
 | Topic | Default for the prototype |
-|---|---|
+| --- | --- |
 | UI framework | React + canvas grid |
 | Timing | BPM + LPB + ticks per line (Renoise-style) |
 | Driver reserve in ARAM estimate | 8 KB |
