@@ -59,8 +59,12 @@ export type VoiceEvent =
        */
       release?: boolean;
     })
-  /** Noise on/off for this voice (NON). The noise clock itself is global: see 'noiseClock'. */
-  | (EventBase & { type: 'noise'; enabled: boolean })
+  /**
+   * Noise on/off for this voice (NON). The noise clock itself is global: see 'noiseClock'.
+   * `clock` is the clock the note asked for (display and diagnostics only; the register write is
+   * the global event, and another note may have overwritten it).
+   */
+  | (EventBase & { type: 'noise'; enabled: boolean; clock?: number })
   /** Pitch modulation of this voice by the previous voice's output (PMON). */
   | (EventBase & { type: 'pitchMod'; enabled: boolean });
 
@@ -82,7 +86,10 @@ export type DiagnosticKind =
   | 'noDevice'
   | 'noSample'
   | 'loopRealigned'
-  | 'aramOverBudget';
+  | 'aramOverBudget'
+  | 'noiseClockConflict'
+  | 'noiseOneShot'
+  | 'pitchModUnavailable';
 
 export interface Diagnostic {
   kind: DiagnosticKind;

@@ -83,6 +83,7 @@ export function compileSong(project: Project, options: CompileOptions = {}): IR 
   const releaseTicks = Math.max(1, Math.ceil(256 / samplesPerTick));
   const deviceName = (id: string) => ctx.devices.get(id)?.name ?? '?';
   const alloc = allocateVoices(ctx.notes, usable, releaseTicks, totalTicks, diagnostics, (n) => describeNote(n, deviceName(n.deviceId)));
+  ctx.globalEvents.push(...alloc.global);
 
   // Voice demand: notes that want a voice at each tick, whether or not they got one.
   const demandDiff = new Int32Array(totalTicks + 1);

@@ -99,6 +99,9 @@ export class Sequencer {
       case 'echoWrite':
         this.dsp.setEchoWrite(g.enabled);
         break;
+      case 'noiseClock':
+        this.dsp.setNoiseClock(g.clock);
+        break;
     }
   }
 
@@ -161,8 +164,10 @@ export function applyVoiceEvent(dsp: SDsp, voice: number, ev: VoiceEvent): void 
       dsp.setEnvelope(voice, ev.envelope);
       break;
     case 'noise':
+      dsp.setNoise(voice, ev.enabled);
+      break;
     case 'pitchMod':
-      // Reserved in the IR; not modelled by the DSP yet.
+      dsp.setPitchMod(voice, ev.enabled);
       break;
   }
 }

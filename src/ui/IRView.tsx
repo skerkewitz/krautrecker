@@ -33,10 +33,14 @@ function summarise(ir: IR): CellInfo[][] {
       const pitch = evs.some((e) => e.type === 'setPitch');
       const vol = evs.some((e) => e.type === 'setVolume');
       const off = evs.some((e) => e.type === 'keyOff');
+      // Chip marks: "NZ" replaces the sample slot of a noise note, "P" marks pitch modulation.
+      const noiseEv = evs.find((e) => e.type === 'noise');
+      const pmod = evs.some((e) => e.type === 'pitchMod' && e.enabled);
       const cell = row[v];
       if (on && on.type === 'keyOn') {
         const more = evs.filter((e) => e.type === 'keyOn').length > 1 ? '+' : ' ';
-        cell.text = `${noteName(on.note)} ${hex(on.sampleSlot, 2)}${more}${pitch ? '~' : ' '}`;
+        const slot = noiseEv?.type === 'noise' && noiseEv.enabled ? 'NZ' : hex(on.sampleSlot, 2);
+        cell.text = `${noteName(on.note)} ${slot}${more === ' ' && pmod ? 'P' : more}${pitch ? '~' : ' '}`;
         cell.color = theme.note;
         cell.mark = on.stolen ? 'error' : on.clamped ? 'warn' : null;
         cell.source = on.source;
@@ -45,7 +49,8 @@ function summarise(ir: IR): CellInfo[][] {
         cell.color = theme.noteOff;
         cell.source = evs[0].source;
       } else {
-        cell.text = `      ${pitch ? '~' : ' '}${vol ? 'v' : ' '}`;
+        const chip = noiseEv?.type === 'noise' ? (noiseEv.enabled ? 'NZ on ' : 'NZ off') : '      ';
+        cell.text = `${chip}${pitch ? '~' : ' '}${vol ? 'v' : ' '}`;
         cell.color = evs.every((e) => e.auto) ? theme.gutter : theme.fx;
         cell.source = evs[0].source;
       }

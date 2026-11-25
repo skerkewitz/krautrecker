@@ -3,6 +3,7 @@ import type { Cell, Device, Effect, Pattern, Project, Sample, Zone } from '../mo
 import { NOTE_CUT, NOTE_OFF } from '../model/types';
 import { noteName } from '../model/notes';
 import { hashString, mulberry32 } from '../util/prng';
+import { initChipNote, noiseEffectClock, switchNoise, withSurround, zoneNoiseClock } from './chip';
 import * as envelope from './envelope';
 import { pitchFor, playLengthSamples, selectZone, stereoVolume, zoneRoot } from './instrument';
 import { FxMemory } from './fxMemory';
@@ -84,6 +85,10 @@ export interface LogicalNote {
   heldEnd: number;
   /** Tick at which a one-shot sample has finished playing. */
   naturalEnd: number;
+  /** Noise clock when the note starts as noise (zone noise or effect N on its first tick). */
+  noise?: number;
+  /** Pitch modulation: the device whose note must play on the voice just below this one. */
+  pitchModSource?: string;
 }
 
 export interface ExpandContext {
@@ -140,6 +145,8 @@ interface Active {
   cellTouched: boolean;
   /** G effect and T effect state (see envelope.ts). */
   env: envelope.EnvState;
+  /** Noise clock while the note plays noise, else null. */
+  noise: number | null;
 }
 
 interface HeldKey {
@@ -475,11 +482,15 @@ export class TrackProcessor {
       case 'cut':
         if (lineTick === v) this.release(a, tick, a.source, true);
         break;
+      case 'noise':
+        switchNoise(this.ctx, a, noiseEffectClock(v), tick);
+        break;
       case 'retrig':
         if (v > 0 && lineTick > 0 && lineTick % v === 0) {
           const b = this.makeActive(a.device, a.note, a.vol, a.pan, a.column, a.group, a.source, tick);
           if (b) {
             b.pitch = a.pitch;
+            b.noise = a.noise;
             const wasSolo = this.solo === a;
             const wasCol = this.colActive[a.column] === a;
             this.replace(a, tick);
@@ -574,6 +585,7 @@ export class TrackProcessor {
       lastVolR: -1,
       cellTouched: true,
       env: envelope.newEnvState(),
+      noise: zoneNoiseClock(zone),
     };
     this.actives.push(a);
     return a;
@@ -586,9 +598,10 @@ export class TrackProcessor {
     const dip = envelope.tremoloDip(dev.tremolo, a.age) + a.env.tremFx;
     a.age++;
     const { pitch, clamped } = pitchFor(a.pitch + a.vibFx + vib, a.root, a.sample.fineTune + dev.fineTune, a.built);
-    // Device, zone, note and track volume multiply; tremolo then dips the result.
+    // Device, zone, note and track volume multiply; tremolo then dips the result; surround
+    // inverts the right side last, so every volume write carries it.
     const volume = envelope.applyTremolo(Math.round((dev.volume * a.zone.volume * a.vol * this.mix.volume) / (127 * 127 * 127)), dip);
-    const { volL, volR } = stereoVolume(volume, dev.pan + a.zone.pan + a.pan + this.mix.pan);
+    const { volL, volR } = withSurround(dev, stereoVolume(volume, dev.pan + a.zone.pan + a.pan + this.mix.pan));
     if (clamped) {
       diagnoseOnce(ctx, `clamp:${dev.id}:${Math.round(a.pitch)}`, {
         kind: 'pitchClamped',
@@ -631,6 +644,7 @@ export class TrackProcessor {
         heldEnd: Infinity,
         naturalEnd: tick + playTicks,
       };
+      initChipNote(ctx, a.ln, a, tick);
       ctx.notes.push(a.ln);
     } else {
       const env = envelope.envelopeChange(a.env);
