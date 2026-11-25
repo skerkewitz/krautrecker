@@ -89,6 +89,11 @@ export interface LogicalNote {
   noise?: number;
   /** Pitch modulation: the device whose note must play on the voice just below this one. */
   pitchModSource?: string;
+  /**
+   * Set by the allocator when this note's device modulates a note starting on the same tick: it
+   * then prefers a free voice whose upper neighbour is free too, so the pair can sit together.
+   */
+  pairAbove?: boolean;
 }
 
 export interface ExpandContext {

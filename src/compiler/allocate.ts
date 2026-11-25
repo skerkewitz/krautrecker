@@ -1,5 +1,5 @@
 import { noteName } from '../model/notes';
-import { ChipVoices, pitchModRank, pitchModVoice } from './chip';
+import { ChipVoices, markPitchModPairs, pitchModRank, pitchModVoice } from './chip';
 import type { LogicalNote } from './expand';
 import type { Diagnostic, GlobalEvent, KeyOnEvent, VoiceEvent } from './ir';
 import { VOICE_COUNT } from './ir';
@@ -131,7 +131,16 @@ export class VoiceAllocator {
     }
     // Pitch modulation: the voice just above a voice playing the source device (see chip.ts).
     if (v < 0 && note.pitchModSource) v = pitchModVoice(this, usable, note, tick);
-    // 2. Lowest free voice.
+    // 2. Lowest free voice; a modulator whose partner starts now wants a free voice above it too.
+    if (v < 0 && note.pairAbove) {
+      for (const u of usable) {
+        if (this.isFree(u, tick) && usable.includes(u + 1) && this.isFree(u + 1, tick)) {
+          v = u;
+          reason = 'free';
+          break;
+        }
+      }
+    }
     if (v < 0) {
       for (const u of usable) {
         if (this.isFree(u, tick)) {
@@ -229,6 +238,7 @@ export function allocateVoices(
       }
     }
 
+    markPitchModPairs(b.requests);
     b.requests.sort((x, y) => pitchModRank(x) - pitchModRank(y) || y.priority - x.priority || x.track - y.track || x.column - y.column || x.id - y.id);
     for (const note of b.requests) {
       const a = alloc.assign(note, tick);

@@ -1,6 +1,6 @@
 import { buildSample, type BuiltSample } from '../brr/sampleBuild';
 import { VoiceAllocator } from '../compiler/allocate';
-import { ChipVoices, pitchModRank } from '../compiler/chip';
+import { ChipVoices, markPitchModPairs, pitchModRank } from '../compiler/chip';
 import { TrackProcessor, type ExpandContext, type LogicalNote, type SongPattern } from '../compiler/expand';
 import { selectZone } from '../compiler/instrument';
 import { VOICE_COUNT } from '../compiler/ir';
@@ -249,6 +249,7 @@ export class LivePlayer {
       }
     }
     const fresh = ctx.notes.splice(0);
+    markPitchModPairs(fresh);
     fresh.sort((x, y) => pitchModRank(x) - pitchModRank(y) || y.priority - x.priority || x.track - y.track || x.column - y.column || x.id - y.id);
     for (const n of fresh) {
       const a = this.alloc.assign(n, t);

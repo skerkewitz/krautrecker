@@ -97,6 +97,17 @@ export function pitchModRank(n: LogicalNote): number {
 }
 
 /**
+ * Marks the notes of one tick whose device is the pitch-modulation source of another note on the
+ * same tick. The allocator then seats each such modulator where the voice above it is free, so the
+ * modulated note can take that voice. Without this, the modulator takes the lowest free voice and
+ * its neighbour is often busy.
+ */
+export function markPitchModPairs(requests: LogicalNote[]): void {
+  const sources = new Set(requests.map((n) => n.pitchModSource).filter((s): s is string => !!s));
+  for (const n of requests) n.pairAbove = sources.has(n.deviceId);
+}
+
+/**
  * Voice placement for a pitch-modulated note: a voice v >= 1 whose voice v-1 plays a note of the
  * source device. Free voices first, then voices whose note is only releasing; it never cuts a held
  * note for this. Returns -1 when no voice qualifies, and the normal rules apply.

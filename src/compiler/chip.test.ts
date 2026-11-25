@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { demoProject } from '../model/demo';
+import { grooveProject } from '../model/demo';
 import { newZone } from '../model/defaults';
 import { NOTE_OFF, type Cell, type Device, type Zone } from '../model/types';
 import { compileSong } from './compile';
@@ -112,10 +112,28 @@ describe('noise', () => {
   });
 
   it('songs without noise, pitch modulation or surround get no chip events', () => {
-    const ir = compileSong(demoProject());
+    const ir = compileSong(grooveProject());
     expect(ir.voices.flat().filter((e) => e.type === 'noise' || e.type === 'pitchMod')).toEqual([]);
     expect(clocks(ir)).toEqual([]);
     expect(ir.voices.flat().some((e) => (e.type === 'keyOn' || e.type === 'setVolume') && e.volR < 0)).toBe(false);
+  });
+});
+
+describe('pitch modulation pair placement', () => {
+  it('a modulator starting with its partner sits where the voice above it is free', () => {
+    // Voices 0 and 1 are taken; voice 0 is released, so the lowest free voice (0) has a busy
+    // neighbour (1). The pair must go to voices 2 and 3 instead.
+    const ir = compileSong(
+      fixture([
+        { device: device('held', 'poly', { maxVoices: 8 }), columns: 2, cells: [[0, 0, { note: 60 }], [0, 1, { note: 64 }], [2, 0, { note: 'OFF' }]] },
+        { device: device('mod', 'mono', { volume: 0, priority: 200 }), cells: [[4, 0, { note: 72 }]] },
+        { device: device('car', 'mono', { pitchModSource: 'mod', priority: 200 }), cells: [[4, 0, { note: 60 }]] },
+      ]),
+    );
+    expect(ir.diagnostics.filter((d) => d.kind === 'pitchModUnavailable')).toEqual([]);
+    const on = (v: number) => ir.voices[v].some((e) => e.type === 'keyOn' && e.tick === 24);
+    expect(on(2) && on(3)).toBe(true);
+    expect(ir.voices[3].some((e) => e.type === 'pitchMod' && e.enabled)).toBe(true);
   });
 });
 

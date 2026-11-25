@@ -219,7 +219,10 @@ noise flag and its clock, which keeps mid-song starts and loops correct.
 
 Pitch modulation lets a voice's pitch follow the output of the voice just below it. A device with a
 `pitchModSource` therefore needs a voice whose lower neighbour plays a note of the source device, and
-the allocator places such notes last within a tick and looks for that position. When none exists, the
+the allocator places such notes last within a tick and looks for that position. When a modulator and
+its partner start on the same tick, the modulator takes the lowest free voice whose upper neighbour is
+free as well, rather than simply the lowest free voice, so that the pair can sit together. When no
+position exists, the
 note plays unmodulated with a warning rather than being dropped, because an unmodulated note at the
 right time and pitch does less damage than a missing one. The modulator may be silent: modulation uses
 the voice's output before its volume.
