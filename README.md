@@ -39,7 +39,7 @@ The pattern editor works like FastTracker 2 or Renoise. ☰ → Keyboard shortcu
 most important ones:
 
 | Key | Action |
-|---|---|
+| --- | --- |
 | Z…M, Q…P (two piano rows) | enter a note; works by key position, so QWERTZ and AZERTY behave like QWERTY |
 | 1 / ^ (key left of 1) | note off / note cut |
 | Esc | toggle edit mode (off: keys only play the device) |
@@ -54,7 +54,7 @@ writing its letter with `00` on the next lines. With the cursor on an effect fie
 explains that effect.
 
 | Group | Letters |
-|---|---|
+| --- | --- |
 | Note | `U`/`D` pitch slide, `P` portamento, `V` vibrato, `T` tremolo, `A` volume slide, `L` pan slide, `C` cut, `R` retrigger, `G` switch to a GAIN envelope, `N` noise on/off |
 | Track | `M` track volume, `K` track volume slide, `X` track pan |
 | Song | `F` tempo, `W` main volume, `H` main volume slide, `E` echo volume, `Y` echo volume slide, `B` echo feedback, `Z` echo freeze |
