@@ -4,13 +4,14 @@ import { int16ToBase64 } from '../util/base64';
 
 /**
  * Small, fully deterministic projects for compiler tests. One looping test sample plays at
- * exactly pitch 0x1000 on note 60, so expected pitch values are easy to reason about.
+ * exactly pitch 0x1000 on note 60, so expected pitch values are easy to reason about. It is a
+ * 1 kHz sine, so no note the pitch register can reach makes it alias.
  */
 
 export const TEST_SAMPLE_ID = 'smp_test';
 
 function testPcm(): string {
-  return int16ToBase64(Int16Array.from({ length: 64 }, (_, i) => (i % 32 < 16 ? 8000 : -8000)));
+  return int16ToBase64(Int16Array.from({ length: 64 }, (_, i) => Math.round(8000 * Math.sin((2 * Math.PI * i) / 32))));
 }
 
 export interface TrackSpec {
