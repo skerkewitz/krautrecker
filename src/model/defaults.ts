@@ -1,8 +1,11 @@
 import { newId } from '../util/base64';
 import type { Cell, Device, DeviceMode, Envelope, Pattern, Project, Track, Zone } from './types';
 
-/** Version 2 added effect columns, release/GAIN, tremolo, noise, pitch modulation, track mix and the loop point. */
-export const SCHEMA_VERSION = 2;
+/**
+ * Version 2 added effect columns, release/GAIN, tremolo, noise, pitch modulation, track mix and the
+ * loop point. Version 3 added the song key, chord markers and line comments.
+ */
+export const SCHEMA_VERSION = 3;
 
 /** Instant attack, no decay, full sustain: the note holds until key-off. */
 export const DEFAULT_ENVELOPE: Envelope = { attack: 15, decay: 7, sustainLevel: 7, sustainRate: 0 };
@@ -56,7 +59,7 @@ export function newTrack(deviceId: string | null, noteColumns: number, lines: nu
 }
 
 export function newPattern(name: string, lines: number, tracks: Track[], id = newId('pat')): Pattern {
-  return { id, name, lines, tracks };
+  return { id, name, lines, tracks, key: null, chords: [], comments: [] };
 }
 
 export function emptyProject(): Project {
@@ -71,6 +74,7 @@ export function emptyProject(): Project {
     patterns: [pattern],
     order: [pattern.id],
     loopOrderIndex: 0,
+    key: null,
     hardware: {
       reservedSfxVoices: 0,
       echo: { delay: 0, feedback: 0, volumeL: 0, volumeR: 0, fir: [127, 0, 0, 0, 0, 0, 0, 0], writeEnabled: true },

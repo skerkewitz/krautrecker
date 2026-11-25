@@ -30,6 +30,37 @@ export interface Project {
    * Almost every SNES track plays an intro once and then loops a later section.
    */
   loopOrderIndex: number;
+  /**
+   * The song's key (null = not set). Like chord markers and comments it never changes the sound;
+   * it states the harmonic intent so the editor and the musical checks can relate notes to it.
+   */
+  key: MusicalKey | null;
+}
+
+export type Mode = 'major' | 'minor' | 'dorian' | 'phrygian' | 'lydian' | 'mixolydian' | 'locrian';
+
+export interface MusicalKey {
+  /** Pitch class of the tonic: 0 = C, 1 = C#, ... 11 = B. */
+  root: number;
+  mode: Mode;
+}
+
+/**
+ * A chord symbol at a pattern line, e.g. "Em", "D/E", "Cmaj7", "Bbsus4". It holds until the next
+ * marker, also across pattern boundaries in song order.
+ */
+export interface ChordMarker {
+  line: number;
+  symbol: string;
+}
+
+/** A note left at a pattern line, for the composer or for feedback ("bar 3, lead: sounds off"). */
+export interface LineComment {
+  id: string;
+  line: number;
+  /** Track index, or null when the comment is about the whole line. */
+  track: number | null;
+  text: string;
 }
 
 /**
@@ -222,6 +253,11 @@ export interface Pattern {
   name: string;
   lines: number;
   tracks: Track[];
+  /** Key of this pattern when it differs from the song key (a modulation); null = song key. */
+  key: MusicalKey | null;
+  /** Chord markers, sorted by line. */
+  chords: ChordMarker[];
+  comments: LineComment[];
 }
 
 export interface Track {

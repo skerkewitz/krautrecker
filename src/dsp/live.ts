@@ -210,7 +210,7 @@ export class LivePlayer {
   private liveSong(track: number, deviceId: string | null): SongPattern {
     const tracks: Track[] = [];
     tracks[track] = { deviceId, noteColumns: COLUMNS, ...TRACK_DEFAULTS, cells: [] };
-    return { orderIndex: -1, pattern: { id: 'live', name: 'Live', lines: 1, tracks }, startTick: this.tick };
+    return { orderIndex: -1, pattern: { id: 'live', name: 'Live', lines: 1, tracks, key: null, chords: [], comments: [] }, startTick: this.tick };
   }
 
   /** Ends a track's notes (key-off) and forgets the track. */

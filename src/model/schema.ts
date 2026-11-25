@@ -26,6 +26,8 @@ const MIGRATIONS: Record<number, Migration> = {
     const { mainVolume: _old, ...rest } = hw;
     return { ...raw, patterns, hardware: { ...rest, mainVolumeL: mv, mainVolumeR: mv }, schemaVersion: 2 };
   },
+  // 2 -> 3: key, chord markers and comments are new and optional; `normalize` adds empty ones.
+  2: (raw) => ({ ...raw, schemaVersion: 3 }),
 };
 
 export class ProjectFormatError extends Error {}
@@ -61,6 +63,7 @@ function normalize(raw: Raw): Project {
     timing: { ...base.timing, ...p.timing },
     hardware: { ...base.hardware, ...p.hardware, echo: { ...base.hardware.echo, ...p.hardware?.echo } },
     loopOrderIndex: typeof p.loopOrderIndex === 'number' ? p.loopOrderIndex : 0,
+    key: p.key ?? null,
     devices: p.devices.map(normalizeDevice),
     patterns: p.patterns.map(normalizePattern),
   };
@@ -76,5 +79,11 @@ function normalizeDevice(d: Device): Device {
 }
 
 function normalizePattern(pat: Pattern): Pattern {
-  return { ...pat, tracks: pat.tracks.map((t: Track) => ({ ...TRACK_DEFAULTS, ...t })) };
+  return {
+    ...pat,
+    key: pat.key ?? null,
+    chords: Array.isArray(pat.chords) ? pat.chords : [],
+    comments: Array.isArray(pat.comments) ? pat.comments : [],
+    tracks: pat.tracks.map((t: Track) => ({ ...TRACK_DEFAULTS, ...t })),
+  };
 }

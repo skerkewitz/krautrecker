@@ -542,6 +542,28 @@ export function demoProject(): Project {
   const patterns = [dawn(), motor(), autobahn(), fastLane(), exit(), valley(), silence()];
   // The noise hats sit a little back in the mix: track volume in each header.
   for (const pat of patterns) pat.tracks[T.hats].volume = 100;
+  // Harmony as stated intent: the song key, the B section's modulation and a marker per chord.
+  // They change nothing in the sound; the editor and the musical checks read them.
+  project.key = { root: 4, mode: 'dorian' };
+  const bars = (symbols: string[]) => symbols.map((symbol, i) => ({ line: i * 16, symbol }));
+  const chords: Record<string, { line: number; symbol: string }[]> = {
+    pat_dawn: [
+      { line: 0, symbol: 'Em' },
+      { line: 32, symbol: 'D/E' },
+      { line: 48, symbol: 'C/E' },
+    ],
+    pat_motor: [
+      { line: 0, symbol: 'Em' },
+      { line: 32, symbol: 'D/E' },
+    ],
+    pat_autobahn: bars(['Em', 'D/E', 'C/E', 'D/E']),
+    pat_lane: bars(['Em', 'D/E', 'C/E', 'D/E']),
+    pat_exit: bars(['Em', 'D/E', 'C/E', 'D/E']),
+    pat_valley: bars(['Am', 'G/A', 'F/A', 'G/A']),
+    pat_silence: bars(['Em', 'D/E', 'C/E', 'D/E']),
+  };
+  for (const pat of patterns) pat.chords = chords[pat.id] ?? [];
+  patterns.find((pat) => pat.id === 'pat_valley')!.key = { root: 9, mode: 'dorian' };
   project.patterns = patterns;
   project.order = ['pat_dawn', 'pat_motor', 'pat_autobahn', 'pat_lane', 'pat_exit', 'pat_valley', 'pat_silence'];
   project.loopOrderIndex = 2;
