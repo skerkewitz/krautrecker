@@ -1,0 +1,30 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`arpeggiator > golden 1`] = `
+[
+  "v0 t0 keyOn n60 p1000 vol100/100 @0:0:1",
+  "v0 t2 keyOn n64 p1429 vol100/100 @0:0:0",
+  "v0 t4 keyOn n67 p17f9 vol100/100 @0:0:2",
+  "v0 t6 keyOn n72 p2000 vol100/100 @0:0:1",
+  "v0 t8 keyOn n76 p2851 vol100/100 @0:0:0",
+  "v0 t10 keyOn n79 p2ff2 vol100/100 @0:0:2",
+  "v0 t12 keyOff @0:0:2",
+]
+`;
+
+exports[`device modes > poly: a chord takes one voice per note 1`] = `
+[
+  "v0 t0 keyOn n60 p1000 vol100/100 @0:0:0",
+  "v1 t0 keyOn n64 p1429 vol100/100 @0:0:1",
+  "v2 t0 keyOn n67 p17f9 vol100/100 @0:0:2",
+]
+`;
+
+exports[`drums and choke groups > golden 1`] = `
+[
+  "v0 t0 keyOn n36 p1000 vol100/100 @0:0:0",
+  "v1 t0 keyOn n46 p17f9 vol100/100 @0:0:1",
+  "v1 t12 keyOn n42 p2000 vol100/100 @0:2:1",
+  "v2 t24 keyOn n36 p1000 vol100/100 @0:4:0",
+]
+`;
