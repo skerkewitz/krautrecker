@@ -1,4 +1,5 @@
 import { BRR_BLOCK_BYTES, decodeBlock } from '../brr/brr';
+import { modulatedPitch, NOISE_INITIAL, noiseSample, noiseStep } from './noise';
 import { COUNTER_OFFSETS, COUNTER_RANGE, COUNTER_RATES, GAUSS } from './tables';
 
 /**
@@ -7,8 +8,8 @@ import { COUNTER_OFFSETS, COUNTER_RANGE, COUNTER_RATES, GAUSS } from './tables';
  *
  * It models what defines the SNES sound: live BRR decoding (including the filter history
  * carrying over at the loop point), 4-point Gaussian interpolation, the 14-bit pitch register,
- * the hardware ADSR/GAIN envelope with its rate tables, per-voice L/R volume, and the echo unit
- * with its 8-tap FIR filter. It is not cycle-exact: register writes take effect immediately and
+ * the hardware ADSR/GAIN envelope with its rate tables, per-voice L/R volume, the noise generator
+ * and pitch modulation (see noise.ts), and the echo unit with its 8-tap FIR filter. It is not cycle-exact: register writes take effect immediately and
  * the key-on delay of a few samples is skipped.
  */
 
@@ -76,6 +77,10 @@ class Voice {
   env = 0;
   hiddenEnv = 0;
   echo = false;
+  /** NON: output the noise generator instead of the sample. A register bit: key-on keeps it. */
+  noise = false;
+  /** PMON: pitch modulated by the previous voice's output. Ignored on voice 0, as on hardware. */
+  pitchMod = false;
   /** Silent and idle: skip work. */
   idle = true;
   lastOut = 0;
@@ -126,6 +131,9 @@ export class SDsp {
   mainVolL = 127;
   mainVolR = 127;
   private counter = 0;
+  /** Global noise clock (FLG bits 0-4) and the noise shift register. */
+  noiseClock = 0;
+  private noiseLfsr = NOISE_INITIAL;
   private echoParams: EchoParams = { delay: 0, feedback: 0, volumeL: 0, volumeR: 0, fir: [127, 0, 0, 0, 0, 0, 0, 0] };
   private echoBuf = new Int16Array(2);
   private echoFrames = 1;
@@ -182,12 +190,26 @@ export class SDsp {
     this.voices[voice].setEnvelope(e);
   }
 
-  /** Silences every voice immediately (used when playback stops). */
+  setNoise(voice: number, enabled: boolean): void {
+    this.voices[voice].noise = enabled;
+  }
+
+  setPitchMod(voice: number, enabled: boolean): void {
+    this.voices[voice].pitchMod = enabled;
+  }
+
+  setNoiseClock(clock: number): void {
+    this.noiseClock = clock & 0x1f;
+  }
+
+  /** Silences every voice immediately (used when playback stops). Noise and PMON start off again. */
   silence(): void {
     for (const v of this.voices) {
       v.envMode = EnvMode.Release;
       v.env = 0;
       v.idle = true;
+      v.noise = false;
+      v.pitchMod = false;
     }
   }
 
@@ -276,6 +298,8 @@ export class SDsp {
     const fir = ep.fir;
     for (let n = 0; n < count; n++) {
       if (--this.counter < 0) this.counter = COUNTER_RANGE - 1;
+      const nc = this.noiseClock;
+      if ((this.counter + COUNTER_OFFSETS[nc]) % COUNTER_RATES[nc] === 0) this.noiseLfsr = noiseStep(this.noiseLfsr);
       let mainL = 0;
       let mainR = 0;
       let echoL = 0;
@@ -294,12 +318,13 @@ export class SDsp {
         out = (out << 16) >> 16;
         out += (GAUSS[off] * v.w3) >> 11;
         out = clamp16(out) & ~1;
+        if (v.noise) out = noiseSample(this.noiseLfsr);
         // Envelope.
         out = ((out * v.env) >> 11) & ~1;
         v.lastOut = out;
         this.runEnvelope(v);
         // Advance the sample position by the pitch register.
-        v.interpPos += v.pitch;
+        v.interpPos += v.pitchMod && i > 0 ? modulatedPitch(v.pitch, voices[i - 1].lastOut) : v.pitch;
         while (v.interpPos >= 0x1000) {
           v.interpPos -= 0x1000;
           v.w0 = v.w1;

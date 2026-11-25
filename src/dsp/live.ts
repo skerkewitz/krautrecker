@@ -1,5 +1,6 @@
 import { buildSample, type BuiltSample } from '../brr/sampleBuild';
 import { VoiceAllocator } from '../compiler/allocate';
+import { ChipVoices, pitchModRank } from '../compiler/chip';
 import { TrackProcessor, type ExpandContext, type LogicalNote, type SongPattern } from '../compiler/expand';
 import { selectZone } from '../compiler/instrument';
 import { VOICE_COUNT } from '../compiler/ir';
@@ -70,6 +71,16 @@ export class LivePlayer {
   private nextTrack = 0;
   private alloc = new VoiceAllocator(ALL_VOICES, 1);
   private releaseTicks = 1;
+  /** NON/PMON bits of the live DSP's voices; they outlive the allocator, as the registers do. */
+  private chip = new ChipVoices(
+    {
+      voice: (v, ev) => applyVoiceEvent(this.dsp, v, ev),
+      global: (ev) => {
+        if (ev.type === 'noiseClock') this.dsp.setNoiseClock(ev.clock);
+      },
+    },
+    () => '',
+  );
   private sounding: { note: LogicalNote; cursor: number }[] = [];
   private pending: { lt: LiveTrack; column: number; cell: Cell }[] = [];
   private tick = 0;
@@ -229,14 +240,20 @@ export class LivePlayer {
       while (s.cursor < s.note.events.length) {
         const ev = s.note.events[s.cursor++];
         const v = this.alloc.applyEvent(s.note, ev, t);
-        if (v >= 0) applyVoiceEvent(this.dsp, v, ev);
+        if (v >= 0) {
+          applyVoiceEvent(this.dsp, v, ev);
+          this.chip.routed(this.alloc, s.note, v, ev, t);
+        }
       }
     }
     const fresh = ctx.notes.splice(0);
-    fresh.sort((x, y) => y.priority - x.priority || x.track - y.track || x.column - y.column || x.id - y.id);
+    fresh.sort((x, y) => pitchModRank(x) - pitchModRank(y) || y.priority - x.priority || x.track - y.track || x.column - y.column || x.id - y.id);
     for (const n of fresh) {
       const a = this.alloc.assign(n, t);
-      if (a.voice >= 0) applyVoiceEvent(this.dsp, a.voice, n.keyOn);
+      if (a.voice >= 0) {
+        applyVoiceEvent(this.dsp, a.voice, n.keyOn);
+        this.chip.assigned(this.alloc, n, a.voice, t);
+      }
       this.sounding.push({ note: n, cursor: n.events.length });
     }
 

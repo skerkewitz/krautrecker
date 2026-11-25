@@ -1,3 +1,4 @@
+import { formatNoiseRate } from '../compiler/chip';
 import { newDevice, newZone } from '../model/defaults';
 import type { ArpDirection, Device, DeviceMode, Envelope, Zone } from '../model/types';
 import { newId } from '../util/base64';
@@ -48,7 +49,7 @@ export function DevicePanel() {
     if (!device || !confirm(`Delete device "${device.name}"? Tracks using it fall silent.`)) return;
     store.update((p) => ({
       ...p,
-      devices: p.devices.filter((d) => d.id !== device.id),
+      devices: p.devices.filter((d) => d.id !== device.id).map((d) => (d.pitchModSource === device.id ? { ...d, pitchModSource: null } : d)),
       patterns: p.patterns.map((pat) => ({ ...pat, tracks: pat.tracks.map((t) => (t.deviceId === device.id ? { ...t, deviceId: null } : t)) })),
     }));
   };
@@ -118,6 +119,7 @@ function DeviceEditor({ device }: { device: Device }) {
       <Row label="Echo" title="Route this device's voices to the global echo unit.">
         <input type="checkbox" checked={device.echo} onChange={(e) => set({ echo: e.target.checked }, 'echo')} />
       </Row>
+      <ChipSettings device={device} set={set} />
 
       {device.mode === 'arp' && (
         <fieldset>
@@ -226,6 +228,15 @@ function DeviceEditor({ device }: { device: Device }) {
                 </Row>
               </>
             )}
+            <Row label="Noise" title="Play the S-DSP noise generator instead of the sample, at this noise clock. The clock is global: overlapping noise notes share the last one set. The sample still runs underneath, so a one-shot sample ends the noise.">
+              <input type="checkbox" checked={z.noise !== undefined} onChange={(e) => setZone(i, { noise: e.target.checked ? 24 : undefined })} />
+              {z.noise !== undefined && (
+                <>
+                  <NumberInput value={z.noise} min={0} max={31} onChange={(v) => setZone(i, { noise: v })} width={48} />
+                  <span className="dim">{formatNoiseRate(z.noise)}</span>
+                </>
+              )}
+            </Row>
             <Row label="Vol / pan">
               <NumberInput value={z.volume} min={0} max={127} onChange={(v) => setZone(i, { volume: v })} width={52} />
               <NumberInput value={z.pan} min={-64} max={63} onChange={(v) => setZone(i, { pan: v })} width={52} />
@@ -237,5 +248,30 @@ function DeviceEditor({ device }: { device: Device }) {
         </button>
       </fieldset>
     </div>
+  );
+}
+
+/** Surround and pitch modulation: S-DSP voice features of the whole device. */
+function ChipSettings({ device, set }: { device: Device; set: (patch: Partial<Device>, key: string) => void }) {
+  const devices = useStore((s) => s.project.devices);
+  return (
+    <>
+      <Row label="Surround" title="Invert the right channel (negative right volume): wider on stereo speakers, behind the listener on Dolby Surround.">
+        <input type="checkbox" checked={device.surround} onChange={(e) => set({ surround: e.target.checked }, 'surround')} />
+      </Row>
+      <Row label="Pitch mod" title="PMON: this device's notes are frequency-modulated by the output of the voice just below them, which must play a note of the source device. A silent (volume 0) source still modulates.">
+        <select value={device.pitchModSource ?? ''} onChange={(e) => set({ pitchModSource: e.target.value || null }, 'pmod')}>
+          <option value="">Off</option>
+          {devices
+            .filter((d) => d.id !== device.id)
+            .map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+          {device.pitchModSource && !devices.some((d) => d.id === device.pitchModSource) && <option value={device.pitchModSource}>(missing)</option>}
+        </select>
+      </Row>
+    </>
   );
 }

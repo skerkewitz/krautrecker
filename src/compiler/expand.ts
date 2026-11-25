@@ -3,6 +3,7 @@ import type { Cell, Device, Effect, Pattern, Project, Sample, Zone } from '../mo
 import { NOTE_CUT, NOTE_OFF } from '../model/types';
 import { noteName } from '../model/notes';
 import { hashString, mulberry32 } from '../util/prng';
+import { initChipNote, noiseEffectClock, switchNoise, withSurround, zoneNoiseClock } from './chip';
 import { pitchFor, playLengthSamples, selectZone, stereoVolume, toDspEnvelope, zoneRoot } from './instrument';
 import type { Diagnostic, GlobalEvent, KeyOnEvent, SourceRef, VoiceEvent } from './ir';
 
@@ -80,6 +81,10 @@ export interface LogicalNote {
   heldEnd: number;
   /** Tick at which a one-shot sample has finished playing. */
   naturalEnd: number;
+  /** Noise clock when the note starts as noise (zone noise or effect N on its first tick). */
+  noise?: number;
+  /** Pitch modulation: the device whose note must play on the voice just below this one. */
+  pitchModSource?: string;
 }
 
 export interface ExpandContext {
@@ -132,6 +137,8 @@ interface Active {
   lastVolR: number;
   /** Set when a cell (not modulation) changed this note during the current tick. */
   cellTouched: boolean;
+  /** Noise clock while the note plays noise, else null. */
+  noise: number | null;
 }
 
 interface HeldKey {
@@ -448,11 +455,15 @@ export class TrackProcessor {
       case 'cut':
         if (lineTick === v) this.release(a, tick, a.source, true);
         break;
+      case 'noise':
+        switchNoise(this.ctx, a, noiseEffectClock(v), tick);
+        break;
       case 'retrig':
         if (v > 0 && lineTick > 0 && lineTick % v === 0) {
           const b = this.makeActive(a.device, a.note, a.vol, a.pan, a.column, a.group, a.source, tick);
           if (b) {
             b.pitch = a.pitch;
+            b.noise = a.noise;
             const wasSolo = this.solo === a;
             const wasCol = this.colActive[a.column] === a;
             this.replace(a, tick);
@@ -546,6 +557,7 @@ export class TrackProcessor {
       lastVolL: -1,
       lastVolR: -1,
       cellTouched: true,
+      noise: zoneNoiseClock(zone),
     };
     this.actives.push(a);
     return a;
@@ -561,7 +573,7 @@ export class TrackProcessor {
     a.age++;
     const { pitch, clamped } = pitchFor(a.pitch + a.vibFx + vib, a.root, a.sample.fineTune, a.built);
     const volume = Math.round((dev.volume * a.zone.volume * a.vol) / (127 * 127));
-    const { volL, volR } = stereoVolume(volume, dev.pan + a.zone.pan + a.pan);
+    const { volL, volR } = withSurround(dev, stereoVolume(volume, dev.pan + a.zone.pan + a.pan));
     if (clamped) {
       diagnoseOnce(ctx, `clamp:${dev.id}:${Math.round(a.pitch)}`, {
         kind: 'pitchClamped',
@@ -604,6 +616,7 @@ export class TrackProcessor {
         heldEnd: Infinity,
         naturalEnd: tick + playTicks,
       };
+      initChipNote(ctx, a.ln, a, tick);
       ctx.notes.push(a.ln);
     } else {
       if (pitch !== a.lastPitch) {

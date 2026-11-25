@@ -1,6 +1,7 @@
 import { noteName } from '../model/notes';
+import { ChipVoices, pitchModRank, pitchModVoice } from './chip';
 import type { LogicalNote } from './expand';
-import type { Diagnostic, KeyOnEvent, VoiceEvent } from './ir';
+import type { Diagnostic, GlobalEvent, KeyOnEvent, VoiceEvent } from './ir';
 import { VOICE_COUNT } from './ir';
 
 /**
@@ -54,6 +55,17 @@ export class VoiceAllocator {
   owns(n: LogicalNote): number {
     const v = this.voiceOf.get(n.id);
     return v !== undefined && this.state[v].note === n ? v : -1;
+  }
+
+  /** The note sounding on a voice (held or releasing), or null when the voice is free. */
+  noteAt(v: number, tick: number): LogicalNote | null {
+    return this.isFree(v, tick) ? null : this.state[v].note;
+  }
+
+  /** The note still holding a voice (not released or replaced), or null. */
+  heldNoteAt(v: number, tick: number): LogicalNote | null {
+    const n = this.noteAt(v, tick);
+    return n && !this.inRelease(v, tick) && n.heldEnd > tick ? n : null;
   }
 
   private inRelease(v: number, tick: number): boolean {
@@ -111,6 +123,8 @@ export class VoiceAllocator {
         reason = 'limit';
       }
     }
+    // Pitch modulation: the voice just above a voice playing the source device (see chip.ts).
+    if (v < 0 && note.pitchModSource) v = pitchModVoice(this, usable, note, tick);
     // 2. Lowest free voice.
     if (v < 0) {
       for (const u of usable) {
@@ -158,6 +172,8 @@ export interface AllocationResult {
   lanes: VoiceEvent[][];
   /** Voices in use at each tick. */
   usedPerTick: Uint8Array;
+  /** Global events from voice allocation (noise clock writes of the notes that got a voice). */
+  global: GlobalEvent[];
 }
 
 /** Allocates voices for a whole song and writes the voice lanes of the IR. */
@@ -173,6 +189,8 @@ export function allocateVoices(
   const alloc = new VoiceAllocator(usable, releaseTicks);
   const keyOnOut = new Map<number, KeyOnEvent>();
   const usedPerTick = new Uint8Array(Math.max(0, totalTicks));
+  const global: GlobalEvent[] = [];
+  const chip = new ChipVoices({ voice: (v, ev) => lanes[v].push(ev), global: (ev) => global.push(ev), diagnostic: (d) => diagnostics.push(d) }, describe);
 
   // Bucket work by tick.
   type Item = { note: LogicalNote; event: VoiceEvent };
@@ -199,10 +217,13 @@ export function allocateVoices(
     b.events.sort((x, y) => x.note.id - y.note.id);
     for (const { note, event } of b.events) {
       const v = alloc.applyEvent(note, event, tick);
-      if (v >= 0) lanes[v].push(event);
+      if (v >= 0) {
+        lanes[v].push(event);
+        chip.routed(alloc, note, v, event, tick);
+      }
     }
 
-    b.requests.sort((x, y) => y.priority - x.priority || x.track - y.track || x.column - y.column || x.id - y.id);
+    b.requests.sort((x, y) => pitchModRank(x) - pitchModRank(y) || y.priority - x.priority || x.track - y.track || x.column - y.column || x.id - y.id);
     for (const note of b.requests) {
       const a = alloc.assign(note, tick);
       if (a.voice < 0) {
@@ -230,10 +251,11 @@ export function allocateVoices(
       const keyOn: KeyOnEvent = { ...note.keyOn };
       keyOnOut.set(note.id, keyOn);
       lanes[a.voice].push(keyOn);
+      chip.assigned(alloc, note, a.voice, tick);
     }
   }
   recordUsageUntil(totalTicks);
-  return { lanes, usedPerTick };
+  return { lanes, usedPerTick, global };
 }
 
 export function describeNote(n: LogicalNote, deviceName: string): string {
