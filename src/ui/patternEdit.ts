@@ -1,6 +1,7 @@
 import { clamp, FX_BY_LETTER } from '../model/notes';
 import { NOTE_CUT, NOTE_OFF, type Cell, type Effect, type Pattern } from '../model/types';
 import { clonePatternCells, currentPattern, Field, FIELD_COUNT, fxField, store, setCell, updatePattern, type Cursor, type Selection } from './store';
+import { commentsAfterLineDelete, commentsAfterLineInsert } from './harmonyEdit';
 
 /**
  * Pattern editing operations used by the keyboard and MIDI handlers. They read and write the
@@ -204,7 +205,7 @@ export function insertLine(): void {
       if (!t) return pat;
       t.cells.splice(line, 0, Array.from({ length: t.noteColumns }, () => null));
       t.cells.length = pat.lines;
-      return next;
+      return commentsAfterLineInsert(next, track, line);
     }),
   );
 }
@@ -221,7 +222,7 @@ export function backspaceLine(): void {
       if (!t) return pat;
       t.cells.splice(line - 1, 1);
       t.cells.push(Array.from({ length: t.noteColumns }, () => null));
-      return next;
+      return commentsAfterLineDelete(next, track, line - 1);
     }),
   );
   moveCursor(-1, 0);

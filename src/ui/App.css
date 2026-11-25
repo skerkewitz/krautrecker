@@ -685,6 +685,152 @@ legend {
   box-shadow: inset 0 0 0 1px #3d4760;
 }
 
+/* Keys, chord markers and comments in the pattern editor. */
+.pe-scroll {
+  position: relative;
+}
+.pe-gutter-head {
+  flex-shrink: 0;
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-end;
+  padding-bottom: 3px;
+  font-size: 11px;
+  color: var(--dim);
+}
+.key-picker {
+  position: relative;
+}
+.key-picker > button {
+  white-space: nowrap;
+}
+.key-picker > button.active {
+  border-color: #475066;
+}
+.key-pop {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  display: grid;
+  gap: 6px;
+  min-width: 280px;
+  padding: 8px 10px;
+  background: #1b1f26;
+  border: 1px solid #343a47;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+.key-pop label > span {
+  width: 52px;
+}
+.key-pop .dim {
+  font-size: 11.5px;
+}
+.pattern-bar .cursor-info {
+  margin-left: auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  overflow: hidden;
+}
+.pattern-bar .cursor-info .fx-help {
+  margin-left: 0;
+}
+.pattern-bar .cursor-info + .hint {
+  margin-left: 0;
+}
+.cursor-comment {
+  min-width: 0;
+  max-width: 360px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  padding-left: 7px;
+  border-left: 3px solid #6cb6ff;
+}
+.note-info .good {
+  color: #7ee08a;
+}
+.note-info .warn {
+  color: var(--warn);
+}
+.annotation-edit {
+  position: absolute;
+  z-index: 5;
+  width: max-content;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 4px;
+  background: #1b1f26;
+  border: 1px solid #3d4760;
+  border-radius: 4px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+}
+.annotation-edit input {
+  padding: 0 4px;
+}
+.annotation-edit input.chord {
+  width: 110px;
+}
+.annotation-edit input.comment {
+  width: 300px;
+}
+.annotation-edit input.invalid {
+  border-color: var(--bad);
+  color: #ff8f94;
+}
+.annotation-label {
+  font-family: Consolas, monospace;
+  font-size: 11.5px;
+  color: var(--dim);
+  white-space: nowrap;
+}
+.annotation-tip {
+  position: absolute;
+  z-index: 4;
+  width: max-content;
+  max-width: 360px;
+  padding: 3px 8px;
+  white-space: pre-wrap;
+  font-size: 12px;
+  pointer-events: none;
+  background: #1b1f26;
+  border: 1px solid #3d4760;
+  border-left: 3px solid #6cb6ff;
+  border-radius: 4px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+}
+.annotation-tip.above {
+  transform: translateY(-100%);
+}
+.diag.comment {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-left-color: #6cb6ff;
+}
+.diag.comment .where {
+  min-width: 10ch;
+  margin-right: 0;
+}
+.cmt-pattern {
+  min-width: 90px;
+  color: var(--dim);
+}
+.cmt-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.diag.comment .icon-button {
+  padding: 0 5px;
+}
+
 /* ---------------------------------------------------------------- IR view */
 
 .ir-view {

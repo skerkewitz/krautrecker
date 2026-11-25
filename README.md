@@ -67,6 +67,15 @@ Devices also offer long releases, a raw GAIN envelope, tremolo, vibrato fade-in,
 and pitch modulation, and each zone can play the chip's noise generator instead of its sample. The Song
 view sets the loop point where playback continues after the end.
 
+You can also write down the harmony you intend and leave notes; neither changes the sound. The **Key**
+button in the pattern bar sets the song key and, for a modulation, a pattern's own key. Ctrl+K (or a
+double-click in the chord lane left of the first track) sets a chord marker such as `Em` or `D/E` at the
+cursor line; it holds until the next marker, also into the following patterns, and symbols Krautrecker
+cannot read are kept but underlined in red. With the cursor on a note, the pattern bar shows its scale
+degree and how it relates to the chord. Ctrl+M comments the cell under the cursor and Ctrl+Alt+M the
+whole line; commented cells get a blue corner mark, and the Comments tab in the bottom panel lists every
+comment and jumps to it. Clearing the text removes a marker or comment.
+
 The project autosaves to the browser (IndexedDB). ☰ → **Save** downloads it as a single `.json` file with
 the samples inside; ☰ → **Open** loads one back.
 
