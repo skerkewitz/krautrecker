@@ -90,7 +90,7 @@ input[type='range'] {
 
 .app {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) 190px auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   grid-template-columns: minmax(0, 1fr);
   height: 100%;
   overflow: hidden;
@@ -126,51 +126,313 @@ input[type='range'] {
   gap: 4px;
   color: var(--dim);
 }
-.toolbar .midi {
+.toolbar .layout-toggles {
   margin-left: auto;
+  gap: 2px;
+}
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  border: 0;
+  background: none;
+  color: var(--dim);
+  border-radius: 4px;
+}
+.icon-button:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--panel-2);
+}
+
+/* ---------------------------------------------------------------- workbench (VS Code style) */
+
+.workbench {
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+}
+.activity-bar {
+  width: 48px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 4px;
+  background: #0c0e11;
+  border-right: 1px solid var(--border);
+}
+.activity {
+  width: 48px;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: #6b7384;
+  border-left: 2px solid transparent;
+}
+.activity:hover {
+  color: var(--text);
+}
+.activity.active {
+  color: var(--text);
+  border-left-color: var(--accent);
+}
+.main-menu {
+  position: relative;
+}
+.menu {
+  position: absolute;
+  left: 46px;
+  top: 4px;
+  z-index: 20;
+  min-width: 250px;
+  padding: 4px;
+  background: #1f232b;
+  border: 1px solid #343a47;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+.menu-item {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  border: 0;
+  background: none;
+  padding: 5px 10px;
+  text-align: left;
+  border-radius: 4px;
+}
+.menu-item:hover:not(:disabled) {
+  background: #2f4a6e;
+}
+.menu-hint {
+  color: var(--dim);
   font-size: 12px;
 }
-
-/* ---------------------------------------------------------------- main area */
-
-.main {
-  display: grid;
-  grid-template-columns: 330px minmax(0, 1fr) minmax(380px, 40%);
-  min-height: 0;
+.menu-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border);
 }
-.left {
+
+.sidebar-slot,
+.panel-slot {
+  flex-shrink: 0;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+}
+.sidebar {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
+  flex: 1;
   background: var(--panel);
-  border-right: 1px solid var(--border);
 }
-.center,
-.right {
+.sidebar.right {
+  flex: none;
+  flex-shrink: 0;
+}
+.sidebar-title {
+  padding: 9px 12px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.editor-column {
+  flex: 1;
   min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
 }
-.right {
-  border-left: 1px solid var(--border);
+.editor-area {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
-.tabs {
+/* A sash is a thin hit area over the border between two areas, highlighted while hovered. */
+.sash {
+  flex-shrink: 0;
+  background: var(--border);
+  position: relative;
+  z-index: 5;
+}
+.sash-left,
+.sash-right {
+  width: 1px;
+  cursor: ew-resize;
+}
+.sash-bottom {
+  height: 1px;
+  cursor: ns-resize;
+}
+.sash::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+}
+.sash-bottom::after {
+  inset: -3px 0;
+}
+.sash-left::after,
+.sash-right::after {
+  inset: 0 -3px;
+}
+.sash:hover,
+.sash:active {
+  background: #3d6fb5;
+}
+
+.bottom-panel {
+  flex: 1;
+  min-width: 0;
   display: flex;
+  flex-direction: column;
+  background: var(--panel);
+}
+.panel-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 8px;
   border-bottom: 1px solid var(--border);
 }
-.tabs button {
-  flex: 1;
+.panel-tab {
   border: 0;
   border-radius: 0;
   background: none;
-  padding: 7px;
+  padding: 7px 10px 6px;
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dim);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.panel-tab.active {
+  color: var(--text);
+  box-shadow: inset 0 -1px var(--accent);
+}
+.badge {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: #3a4150;
+  color: var(--text);
+  font-size: 11px;
+  letter-spacing: 0;
+}
+.panel-close {
+  margin-left: auto;
+}
+.panel-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.pane {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.pane-summary {
+  padding: 6px 12px 0;
+  font-size: 12px;
+}
+
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 24px;
+  padding: 0 6px;
+  background: #1b2533;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+.status-bar button {
+  border: 0;
+  border-radius: 0;
+  background: none;
+  padding: 0 8px;
+  height: 100%;
+  font-size: 12px;
+}
+.status-bar button:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.status-bar .bad {
+  color: #ff8f94;
+}
+.status-bar .warn {
+  color: var(--warn);
+}
+.status-right {
+  margin-left: auto;
+  padding: 0 8px;
   color: var(--dim);
 }
-.tabs button.active {
-  color: var(--text);
-  box-shadow: inset 0 -2px var(--accent);
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+}
+.dialog {
+  max-width: min(640px, 92vw);
+  max-height: 84vh;
+  overflow: auto;
+  background: #1b1f26;
+  border: 1px solid #343a47;
+  border-radius: 8px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+}
+.dialog-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+}
+.shortcuts {
+  border-collapse: collapse;
+  margin: 6px 0 10px;
+}
+.shortcuts td {
+  padding: 4px 14px;
+  vertical-align: top;
+}
+.shortcuts td:first-child {
+  white-space: nowrap;
+}
+kbd {
+  font-family: Consolas, monospace;
+  font-size: 12px;
+  padding: 1px 6px;
+  border: 1px solid #3a4150;
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: #22262e;
 }
 
 .side-panel {
@@ -443,41 +705,25 @@ legend {
   cursor: pointer;
 }
 
-/* ---------------------------------------------------------------- bottom */
+/* ---------------------------------------------------------------- panes */
 
-.bottom {
-  display: grid;
-  grid-template-columns: 220px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.4fr);
-  border-top: 1px solid var(--border);
-  min-height: 0;
-}
-.panel {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  min-width: 0;
-  border-right: 1px solid var(--border);
-  background: var(--panel);
-}
-.panel-title {
-  padding: 5px 10px;
-  font-weight: 600;
-  border-bottom: 1px solid var(--border);
-}
-.panel-title .dim,
-.panel-title .bad {
-  font-weight: 400;
-}
 .panel-empty {
   padding: 20px;
   color: var(--dim);
 }
+.order-list {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
 .order-items {
   flex: 1;
   overflow-y: auto;
+  min-height: 0;
 }
 .order-item {
-  padding: 2px 10px;
+  padding: 3px 12px;
   cursor: pointer;
 }
 .order-item.active {
@@ -576,16 +822,6 @@ legend {
   padding: 4px 10px;
 }
 
-.helpline {
-  padding: 4px 10px;
-  font-size: 11.5px;
-  color: var(--dim);
-  background: var(--panel);
-  border-top: 1px solid var(--border);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 .toast {
   position: fixed;
   bottom: 40px;

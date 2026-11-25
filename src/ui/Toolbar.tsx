@@ -1,42 +1,21 @@
-import { useRef } from 'react';
-import { downloadProject, parseProject } from '../io/projectFile';
-import { demoProject } from '../model/demo';
-import { emptyProject } from '../model/defaults';
 import { playFromCursor, playPattern, playSong, stop } from './actions';
-import { store, useStore } from './store';
+import { LayoutIcon } from './icons';
+import { setLayout, store, useStore } from './store';
 import { NumberInput } from './widgets';
 
+/** The top bar: song title, transport, timing and entry settings, and the layout toggles. */
 export function Toolbar() {
   const project = useStore((s) => s.project);
   const ui = useStore((s) => s.ui);
-  const canUndo = useStore((s) => s.past.length > 0);
-  const canRedo = useStore((s) => s.future.length > 0);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const layout = ui.layout;
   const setTiming = (patch: Partial<typeof project.timing>, key: string) => store.update((p) => ({ ...p, timing: { ...p.timing, ...patch } }), key);
 
-  const open = async (files: FileList | null) => {
-    const f = files?.[0];
-    if (!f) return;
-    try {
-      stop();
-      store.load(parseProject(await f.text()));
-    } catch (e) {
-      store.setUi({ message: `Could not open ${f.name}: ${(e as Error).message}` });
-    }
-    if (fileRef.current) fileRef.current.value = '';
-  };
-  const replace = (make: () => ReturnType<typeof emptyProject>, what: string) => {
-    if (!confirm(`Replace the current project with ${what}? Save it first if you want to keep it.`)) return;
-    stop();
-    store.load(make());
-  };
-
   return (
-    <div className="toolbar">
+    <header className="toolbar">
       <div className="brand" title="SNES music tracker">
         Krautrecker
       </div>
-      <input className="title" value={project.title} onChange={(e) => store.update((p) => ({ ...p, title: e.target.value }), 'title')} title="Song title" />
+      <input className="title" value={project.title} onChange={(e) => store.update((p) => ({ ...p, title: e.target.value }), 'title')} title="Song title" aria-label="Song title" />
       <div className="group transport">
         <button className={ui.playing && ui.playMode === 'song' ? 'on' : ''} onClick={() => void playSong(0)} title="Play song (Space)">
           ▶ Song
@@ -47,7 +26,7 @@ export function Toolbar() {
         <button onClick={() => void playFromCursor()} title="Play from the cursor line (Enter)">
           ▶ Cursor
         </button>
-        <button onClick={stop} title="Stop (Space)">
+        <button onClick={stop} title="Stop (Space)" aria-label="Stop">
           ■
         </button>
         <label title="Loop the song">
@@ -69,38 +48,27 @@ export function Toolbar() {
         </label>
       </div>
       <div className="group">
-        <label title="Keyboard octave (Numpad +/−)">
+        <label title="Keyboard octave (Num +/−)">
           Oct <NumberInput value={ui.octave} min={0} max={8} onChange={(v) => store.setUi({ octave: v })} width={40} />
         </label>
         <label title="Lines the cursor moves after each entry">
           Step <NumberInput value={ui.editStep} min={0} max={16} onChange={(v) => store.setUi({ editStep: v })} width={40} />
         </label>
-        <button className={ui.editMode ? 'on rec' : ''} onClick={() => store.setUi({ editMode: !ui.editMode })} title="Edit mode (Esc): keys write notes. Off: keys only play.">
+        <button className={ui.editMode ? 'on rec' : ''} onClick={() => store.setUi({ editMode: !ui.editMode })} title="Edit mode (Esc): keys write notes. Off: keys only play the device.">
           ● Edit
         </button>
       </div>
-      <div className="group">
-        <button disabled={!canUndo} onClick={() => store.undo()} title="Undo (Ctrl+Z)">
-          ↶
+      <div className="group layout-toggles">
+        <button className="icon-button" title="Toggle left sidebar (Ctrl+B)" aria-label="Toggle left sidebar" aria-pressed={layout.leftOpen} onClick={() => setLayout({ leftOpen: !layout.leftOpen })}>
+          <LayoutIcon part="left" on={layout.leftOpen} />
         </button>
-        <button disabled={!canRedo} onClick={() => store.redo()} title="Redo (Ctrl+Y)">
-          ↷
+        <button className="icon-button" title="Toggle panel (Ctrl+J)" aria-label="Toggle panel" aria-pressed={layout.bottomOpen} onClick={() => setLayout({ bottomOpen: !layout.bottomOpen })}>
+          <LayoutIcon part="bottom" on={layout.bottomOpen} />
+        </button>
+        <button className="icon-button" title="Toggle IR view (Ctrl+Alt+B)" aria-label="Toggle IR view" aria-pressed={layout.rightOpen} onClick={() => setLayout({ rightOpen: !layout.rightOpen })}>
+          <LayoutIcon part="right" on={layout.rightOpen} />
         </button>
       </div>
-      <div className="group">
-        <button onClick={() => downloadProject(store.getState().project)} title="Download the project as a .json file">
-          Save
-        </button>
-        <button onClick={() => fileRef.current?.click()} title="Open a project .json file">
-          Open
-        </button>
-        <input ref={fileRef} type="file" accept=".json,application/json" hidden onChange={(e) => void open(e.target.files)} />
-        <button onClick={() => replace(emptyProject, 'an empty project')}>New</button>
-        <button onClick={() => replace(demoProject, 'the demo song')}>Demo</button>
-      </div>
-      <div className="midi dim" title="Web MIDI input status">
-        {ui.midiStatus}
-      </div>
-    </div>
+    </header>
   );
 }

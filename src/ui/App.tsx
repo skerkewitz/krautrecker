@@ -3,15 +3,13 @@ import { engine } from '../audio/engine';
 import { saveAutosave } from '../io/autosave';
 import { startMidi } from '../midi/midi';
 import { auditionOff, auditionOn, stop, syncEngine, togglePlay } from './actions';
-import { AramMeter, Diagnostics, OrderList, VoiceMeter } from './BottomPanels';
-import { DevicePanel } from './DevicePanel';
-import { HardwarePanel } from './HardwarePanel';
 import { IRView } from './IRView';
+import { saveLayout } from './layout';
 import { enterNote } from './patternEdit';
 import { PatternEditor } from './PatternEditor';
-import { SamplePanel } from './SamplePanel';
-import { Field, store, useStore } from './store';
+import { Field, setLayout, store, useStore } from './store';
 import { Toolbar } from './Toolbar';
+import { ActivityBar, BottomPanel, LeftSidebar, Sash, StatusBar } from './Workbench';
 import './App.css';
 
 function isTextInput(el: EventTarget | null): boolean {
@@ -19,14 +17,25 @@ function isTextInput(el: EventTarget | null): boolean {
 }
 
 export function App() {
-  const tab = useStore((s) => s.ui.leftTab);
+  const layout = useStore((s) => s.ui.layout);
   const message = useStore((s) => s.ui.message);
 
   useEffect(() => {
     // Global shortcuts that work outside the pattern editor too.
     const onKey = (e: KeyboardEvent) => {
-      if (isTextInput(e.target)) return;
       const ctrl = e.ctrlKey || e.metaKey;
+      // Layout toggles work everywhere, as in VS Code.
+      if (ctrl && e.code === 'KeyB') {
+        setLayout((l) => (e.altKey ? { rightOpen: !l.rightOpen } : { leftOpen: !l.leftOpen }));
+        e.preventDefault();
+        return;
+      }
+      if (ctrl && e.code === 'KeyJ') {
+        setLayout((l) => ({ bottomOpen: !l.bottomOpen }));
+        e.preventDefault();
+        return;
+      }
+      if (isTextInput(e.target)) return;
       if (ctrl && e.code === 'KeyZ' && !e.shiftKey) {
         store.undo();
         e.preventDefault();
@@ -56,10 +65,16 @@ export function App() {
     });
 
     // Every project change: push samples and the fresh IR to the player, and autosave.
+    // Layout changes are remembered as a preference, separately from the project.
     let lastProject = store.getState().project;
+    let lastLayout = store.getState().ui.layout;
     let saveTimer: ReturnType<typeof setTimeout> | undefined;
     const unsub = store.subscribe(() => {
-      const p = store.getState().project;
+      const { project: p, ui } = store.getState();
+      if (ui.layout !== lastLayout) {
+        lastLayout = ui.layout;
+        saveLayout(ui.layout);
+      }
       if (p === lastProject) return;
       lastProject = p;
       syncEngine();
@@ -94,47 +109,44 @@ export function App() {
   return (
     <div className="app">
       <Toolbar />
-      <div className="main">
-        <aside className="left">
-          <div className="tabs">
-            {(['devices', 'samples', 'hardware'] as const).map((t) => (
-              <button key={t} className={tab === t ? 'active' : ''} onClick={() => store.setUi({ leftTab: t })}>
-                {t === 'devices' ? 'Devices' : t === 'samples' ? 'Samples' : 'Hardware'}
-              </button>
-            ))}
-          </div>
-          {tab === 'devices' && <DevicePanel />}
-          {tab === 'samples' && <SamplePanel />}
-          {tab === 'hardware' && <HardwarePanel />}
-        </aside>
-        <section className="center">
-          <PatternEditor />
-        </section>
-        <section className="right">
-          <IRView />
-        </section>
+      <div className="workbench">
+        <ActivityBar />
+        {layout.leftOpen && (
+          <>
+            <div style={{ width: layout.leftWidth }} className="sidebar-slot">
+              <LeftSidebar />
+            </div>
+            <Sash side="left" />
+          </>
+        )}
+        <div className="editor-column">
+          <section className="editor-area">
+            <PatternEditor />
+          </section>
+          {layout.bottomOpen && (
+            <>
+              <Sash side="bottom" />
+              <div style={{ height: layout.bottomHeight }} className="panel-slot">
+                <BottomPanel />
+              </div>
+            </>
+          )}
+        </div>
+        {layout.rightOpen && (
+          <>
+            <Sash side="right" />
+            <aside style={{ width: layout.rightWidth }} className="sidebar right">
+              <IRView />
+            </aside>
+          </>
+        )}
       </div>
-      <div className="bottom">
-        <OrderList />
-        <VoiceMeter />
-        <AramMeter />
-        <Diagnostics />
-      </div>
-      <HelpLine />
+      <StatusBar />
       {message && (
         <div className="toast" onClick={() => store.setUi({ message: null })}>
           {message}
         </div>
       )}
-    </div>
-  );
-}
-
-function HelpLine() {
-  return (
-    <div className="helpline">
-      <b>Keys</b> Z–M / Q–P: notes (FT2 layout) · 1: note off · ^/`: cut · Del: clear · Ins/Backspace: shift lines · Tab: next track · Shift+arrows: select ·
-      Ctrl+C/X/V: copy/cut/paste · Esc: edit mode · Space: play/stop · Shift+Space: pattern · Enter: from cursor · Num +/−: octave · fx letters: U D P V A C R
     </div>
   );
 }

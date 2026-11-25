@@ -47,8 +47,7 @@ export function OrderList() {
   };
 
   return (
-    <div className="panel order-list">
-      <div className="panel-title">Song order</div>
+    <div className="order-list">
       <div className="order-items">
         {project.order.map((id, i) => (
           <div key={i} className={`order-item${i === ui.orderIndex ? ' active' : ''}`} onClick={() => select(i)}>
@@ -149,9 +148,9 @@ export function VoiceMeter() {
   };
 
   return (
-    <div className="panel voice-meter">
-      <div className="panel-title">
-        Voices <span className="dim">{available} available · peak demand {peak}</span>
+    <div className="pane voice-meter">
+      <div className="pane-summary">
+        <span className="dim">{available} voices available · peak demand {peak}</span>
         {overflowLines > 0 && <span className="bad"> · over the limit on {overflowLines} lines</span>}
       </div>
       <div className="meter-canvas" ref={ref}>
@@ -181,9 +180,9 @@ export function AramMeter() {
   const over = aram.total > aram.capacity;
   const scale = Math.max(aram.capacity, aram.total);
   return (
-    <div className="panel aram">
-      <div className="panel-title">
-        ARAM <span className={over ? 'bad' : 'dim'}>{kb(aram.total)} of 64 KB</span>
+    <div className="pane aram">
+      <div className="pane-summary">
+        <span className={over ? 'bad' : 'dim'}>{kb(aram.total)} of 64 KB used (estimate)</span>
       </div>
       <div className="aram-bar">
         {ARAM_PARTS.map((p) => (
@@ -220,9 +219,8 @@ export function Diagnostics() {
     });
   };
   return (
-    <div className="panel diagnostics">
-      <div className="panel-title">
-        Diagnostics{' '}
+    <div className="pane diagnostics">
+      <div className="pane-summary">
         <span className="dim">
           {counts.error} errors · {counts.warning} warnings · {counts.info} notes
         </span>

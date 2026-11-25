@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react';
 import { compileSong } from '../compiler/compile';
 import type { IR } from '../compiler/ir';
 import type { Cell, Pattern, Project } from '../model/types';
+import { loadLayout, type Layout } from './layout';
 
 /**
  * App state: the project (with undo/redo), UI state and the compiled IR. The IR is derived:
@@ -53,7 +54,7 @@ export interface UiState {
   playTick: number;
   levels: number[];
   midiStatus: string;
-  leftTab: 'samples' | 'devices' | 'hardware';
+  layout: Layout;
   message: string | null;
 }
 
@@ -127,7 +128,7 @@ class Store {
 
   /** Replaces the whole project (load/new); clears history. */
   load(project: Project): void {
-    this.state = { project, ui: { ...initialUi(project), octave: this.state.ui.octave, midiStatus: this.state.ui.midiStatus }, past: [], future: [] };
+    this.state = { project, ui: { ...initialUi(project), octave: this.state.ui.octave, midiStatus: this.state.ui.midiStatus, layout: this.state.ui.layout }, past: [], future: [] };
     this.emit();
   }
 
@@ -169,6 +170,11 @@ class Store {
   }
 }
 
+/** Changes part of the workbench layout (sidebars, panel, sizes). */
+export function setLayout(patch: Partial<Layout> | ((l: Layout) => Partial<Layout>)): void {
+  store.setUi((ui) => ({ layout: { ...ui.layout, ...(typeof patch === 'function' ? patch(ui.layout) : patch) } }));
+}
+
 /** The device live notes (MIDI, keyboard in play mode) play: the selected one, else the cursor track's. */
 export function liveDeviceId(s: AppState): string | null {
   if (s.ui.selectedDeviceId && s.project.devices.some((d) => d.id === s.ui.selectedDeviceId)) return s.ui.selectedDeviceId;
@@ -194,7 +200,7 @@ function initialUi(project: Project): UiState {
     playTick: 0,
     levels: [0, 0, 0, 0, 0, 0, 0, 0],
     midiStatus: '',
-    leftTab: 'devices',
+    layout: loadLayout(),
     message: null,
   };
 }

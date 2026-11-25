@@ -29,7 +29,13 @@ Vitest 5 loads modules twice under a lower-case drive path and every suite fails
 
 ## Using it
 
-The pattern editor works like FastTracker 2 or Renoise. The bottom line of the app lists the keys; the
+The window is laid out like VS Code. The pattern editor sits in the middle. The activity bar on the far
+left opens the Devices, Samples, Song (order list) and Hardware views in the left sidebar, and its
+☰ menu holds the file commands and the keyboard shortcuts. The bottom panel shows voice usage, the ARAM
+estimate and diagnostics, and the right sidebar shows the compiled IR. Ctrl+B, Ctrl+J and Ctrl+Alt+B
+show or hide the left sidebar, the panel and the IR view, and every edge can be dragged to resize.
+
+The pattern editor works like FastTracker 2 or Renoise. ☰ → Keyboard shortcuts lists all keys; the
 most important ones:
 
 | Key | Action |
@@ -47,8 +53,8 @@ in ticks, and one effect. Effects are a letter plus one hex byte and act only on
 quarter semitones, y = speed), `A` volume slide (x up, y down per tick), `C` cut after xx ticks, `R`
 retrigger every xx ticks.
 
-The project autosaves to the browser (IndexedDB). **Save** downloads it as a single `.json` file with the
-samples inside; **Open** loads one back.
+The project autosaves to the browser (IndexedDB). ☰ → **Save** downloads it as a single `.json` file with
+the samples inside; ☰ → **Open** loads one back.
 
 ## Where to read next
 
