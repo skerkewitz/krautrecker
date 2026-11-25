@@ -3,7 +3,8 @@ import type { Cell, Device, Effect, Pattern, Project, Sample, Zone } from '../mo
 import { NOTE_CUT, NOTE_OFF } from '../model/types';
 import { noteName } from '../model/notes';
 import { hashString, mulberry32 } from '../util/prng';
-import { pitchFor, playLengthSamples, selectZone, stereoVolume, toDspEnvelope, zoneRoot } from './instrument';
+import * as envelope from './envelope';
+import { pitchFor, playLengthSamples, selectZone, stereoVolume, zoneRoot } from './instrument';
 import type { Diagnostic, GlobalEvent, KeyOnEvent, SourceRef, VoiceEvent } from './ir';
 
 /**
@@ -132,6 +133,8 @@ interface Active {
   lastVolR: number;
   /** Set when a cell (not modulation) changed this note during the current tick. */
   cellTouched: boolean;
+  /** G effect and T effect state (see envelope.ts). */
+  env: envelope.EnvState;
 }
 
 interface HeldKey {
@@ -411,6 +414,7 @@ export class TrackProcessor {
       a.vibFx = 0;
       a.vibPhase = 0;
     }
+    if (!fxs.some((fx) => fx.type === 'tremolo')) envelope.resetTremoloEffect(a.env);
     for (const fx of fxs) this.applyEffect(a, fx, tick, lineTick);
   }
 
@@ -444,6 +448,12 @@ export class TrackProcessor {
       }
       case 'volSlide':
         a.vol = Math.max(0, Math.min(127, a.vol + (v >> 4) - (v & 15)));
+        break;
+      case 'tremolo':
+        envelope.tremoloEffect(a.env, v);
+        break;
+      case 'gain':
+        envelope.gainEffect(a.env, v);
         break;
       case 'cut':
         if (lineTick === v) this.release(a, tick, a.source, true);
@@ -546,6 +556,7 @@ export class TrackProcessor {
       lastVolL: -1,
       lastVolR: -1,
       cellTouched: true,
+      env: envelope.newEnvState(),
     };
     this.actives.push(a);
     return a;
@@ -554,13 +565,11 @@ export class TrackProcessor {
   private emit(a: Active, tick: number): void {
     const ctx = this.ctx;
     const dev = a.device;
-    let vib = 0;
-    if (dev.vibrato && dev.vibrato.depth > 0 && a.age >= dev.vibrato.delay) {
-      vib = dev.vibrato.depth * Math.sin((2 * Math.PI * (a.age - dev.vibrato.delay)) / Math.max(1, dev.vibrato.rate));
-    }
+    const vib = envelope.vibratoOffset(dev.vibrato, a.age);
+    const dip = envelope.tremoloDip(dev.tremolo, a.age) + a.env.tremFx;
     a.age++;
     const { pitch, clamped } = pitchFor(a.pitch + a.vibFx + vib, a.root, a.sample.fineTune, a.built);
-    const volume = Math.round((dev.volume * a.zone.volume * a.vol) / (127 * 127));
+    const volume = envelope.applyTremolo(Math.round((dev.volume * a.zone.volume * a.vol) / (127 * 127)), dip);
     const { volL, volR } = stereoVolume(volume, dev.pan + a.zone.pan + a.pan);
     if (clamped) {
       diagnoseOnce(ctx, `clamp:${dev.id}:${Math.round(a.pitch)}`, {
@@ -580,7 +589,7 @@ export class TrackProcessor {
         pitch,
         volL,
         volR,
-        envelope: toDspEnvelope(a.zone.envelope ?? dev.envelope),
+        envelope: envelope.keyOnEnvelope(dev, a.zone, a.env),
         echo: dev.echo,
         note: dev.mode === 'drum' ? a.note : Math.round(a.pitch),
         deviceId: dev.id,
@@ -606,6 +615,8 @@ export class TrackProcessor {
       };
       ctx.notes.push(a.ln);
     } else {
+      const env = envelope.envelopeChange(a.env);
+      if (env) a.ln.events.push({ tick, type: 'setEnvelope', envelope: env, source: a.source });
       if (pitch !== a.lastPitch) {
         const ev: VoiceEvent = { tick, type: 'setPitch', pitch, source: a.source };
         if (!a.cellTouched) ev.auto = true;
@@ -624,12 +635,14 @@ export class TrackProcessor {
     a.cellTouched = false;
   }
 
-  /** Key-off: the note releases (on hardware the release takes about 8 ms). */
+  /** Note-off: the note releases by the device's release mode. A cut is always a hard key-off. */
   private release(a: Active, tick: number, source: SourceRef, cut: boolean): void {
     this.drop(a);
     if (!a.ln) return;
-    if (cut) a.ln.events.push({ tick, type: 'setVolume', volL: 0, volR: 0, source });
-    a.ln.events.push({ tick, type: 'keyOff', source });
+    if (cut) {
+      a.ln.events.push({ tick, type: 'setVolume', volL: 0, volR: 0, source });
+      a.ln.events.push({ tick, type: 'keyOff', source });
+    } else a.ln.events.push(...envelope.releaseEvents(a.device.release, tick, source, this.ctx.samplesPerTick));
     a.ln.heldEnd = Math.min(a.ln.heldEnd, tick);
   }
 

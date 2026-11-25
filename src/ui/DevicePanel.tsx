@@ -2,6 +2,7 @@ import { newDevice, newZone } from '../model/defaults';
 import type { ArpDirection, Device, DeviceMode, Envelope, Zone } from '../model/types';
 import { newId } from '../util/base64';
 import { auditionOff, auditionOn } from './actions';
+import { GainSection, ReleaseSection, TremoloSection } from './EnvelopeSections';
 import { store, useStore } from './store';
 import { NoteInput, NumberInput, Row, Slider } from './widgets';
 
@@ -160,6 +161,8 @@ function DeviceEditor({ device }: { device: Device }) {
           <Slider value={device.envelope.sustainRate} min={0} max={31} onChange={(v) => setEnv({ sustainRate: v })} format={(v) => ms(SR_MS[v])} />
         </Row>
       </fieldset>
+      <GainSection device={device} set={set} />
+      <ReleaseSection device={device} set={set} />
 
       <fieldset>
         <legend>
@@ -181,9 +184,13 @@ function DeviceEditor({ device }: { device: Device }) {
             <Row label="Delay">
               <Slider value={device.vibrato.delay} min={0} max={96} onChange={(v) => set({ vibrato: { ...device.vibrato!, delay: v } }, 'vibdl')} format={(v) => `${v} ticks`} />
             </Row>
+            <Row label="Fade-in" title="Ticks over which the depth grows from 0 to full after the delay.">
+              <Slider value={device.vibrato.fadeIn} min={0} max={96} onChange={(v) => set({ vibrato: { ...device.vibrato!, fadeIn: v } }, 'vibfi')} format={(v) => (v === 0 ? 'off' : `${v} ticks`)} />
+            </Row>
           </>
         )}
       </fieldset>
+      <TremoloSection device={device} set={set} />
 
       <fieldset>
         <legend>Zones (first match wins)</legend>
