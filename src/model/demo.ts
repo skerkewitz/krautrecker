@@ -4,14 +4,14 @@ import { emptyProject, newDevice, newPattern, newTrack, newZone } from './defaul
 import type { Cell, Pattern, Project, Sample } from './types';
 
 /**
- * A small demo song with synthesized samples, so the tracker makes sound before the user has
- * imported anything. Everything is generated deterministically (seeded noise), which also makes
- * the demo a handy compiler test fixture.
+ * Sample synthesis helpers, and `grooveProject`: a small, stable four-track song that tests use as a
+ * fixture. The demo song the app loads lives in demoSong.ts. Everything is generated
+ * deterministically (seeded noise).
  */
 
-const RATE = 32000;
+export const RATE = 32000;
 
-function toInt16(data: Float64Array, gain = 0.8): Int16Array {
+export function toInt16(data: Float64Array, gain = 0.8): Int16Array {
   let peak = 0;
   for (const v of data) peak = Math.max(peak, Math.abs(v));
   const scale = peak > 0 ? (gain * 32767) / peak : 0;
@@ -19,7 +19,7 @@ function toInt16(data: Float64Array, gain = 0.8): Int16Array {
 }
 
 /** One band-limited cycle of `n` samples. Odd-only harmonics give a square, all give a saw. */
-function cycle(n: number, harmonics: number, oddOnly: boolean): Int16Array {
+export function cycle(n: number, harmonics: number, oddOnly: boolean): Int16Array {
   const out = new Float64Array(n);
   for (let h = 1; h <= harmonics; h++) {
     if (oddOnly && h % 2 === 0) continue;
@@ -29,13 +29,13 @@ function cycle(n: number, harmonics: number, oddOnly: boolean): Int16Array {
 }
 
 /** Root note and fine tune (cents) for a waveform whose cycle is `n` samples at 32 kHz. */
-function tuning(n: number): { rootNote: number; fineTune: number } {
+export function tuning(n: number): { rootNote: number; fineTune: number } {
   const exact = 69 + 12 * Math.log2(RATE / n / 440);
   const rootNote = Math.round(exact);
   return { rootNote, fineTune: Math.round((rootNote - exact) * 100) };
 }
 
-function waveSample(id: string, name: string, n: number, harmonics: number, oddOnly: boolean): Sample {
+export function waveSample(id: string, name: string, n: number, harmonics: number, oddOnly: boolean): Sample {
   return {
     id,
     name,
@@ -47,7 +47,7 @@ function waveSample(id: string, name: string, n: number, harmonics: number, oddO
   };
 }
 
-function drumSample(id: string, name: string, seconds: number, fn: (t: number, i: number, rnd: () => number) => number, targetRate = RATE): Sample {
+export function drumSample(id: string, name: string, seconds: number, fn: (t: number, i: number, rnd: () => number) => number, targetRate = RATE): Sample {
   const rnd = mulberry32(0x5eed ^ id.length);
   const n = Math.round(seconds * RATE);
   const data = new Float64Array(n);
@@ -126,7 +126,8 @@ function demoPattern(id: string, name: string, variation: boolean): Pattern {
   return p;
 }
 
-export function demoProject(): Project {
+/** A four-track groove that uses only the original (version 1) features: the test fixture. */
+export function grooveProject(): Project {
   const project = emptyProject();
   project.title = 'Krautrecker demo';
   project.samples = demoSamples();

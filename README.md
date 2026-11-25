@@ -5,8 +5,12 @@ instruments (multisampled sampler devices with mono, legato, poly, arpeggio and 
 compiler turns the song into low-level data for the 8 hardware voices of the SNES sound chip. What you
 hear is always that compiled data, played by a model of the S-DSP running in an AudioWorklet.
 
-This is the Milestone 1 prototype described in [docs/KICKOFF.md](docs/KICKOFF.md). It opens with a
-small demo song built from synthesized samples, so it makes sound before you import anything.
+This is the Milestone 1 prototype described in [docs/KICKOFF.md](docs/KICKOFF.md). It opens with the
+demo song "Autobahn 16 bit" (☰ → Load demo song brings it back), a motorik krautrock piece built from
+synthesized samples that uses the tracker's SNES features in musical context: noise hi-hats, an FM
+bell made with pitch modulation, long string releases, echo swells and freezes, a tempo-ramping intro
+and a key change by track transpose. Its source, [src/model/demoSong.ts](src/model/demoSong.ts), is
+commented section by section.
 
 ## Run it
 

@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { loadAutosave } from './io/autosave';
-import { demoProject } from './model/demo';
+import { demoProject } from './model/demoSong';
 import { App } from './ui/App';
 import { initStore } from './ui/store';
 

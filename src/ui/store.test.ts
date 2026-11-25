@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { demoProject } from '../model/demo';
+import { grooveProject } from '../model/demo';
 import { initStore, liveDeviceId, store } from './store';
 
 // Demo song tracks: 0 Drums, 1 Bass, 2 Arp lead, 3 Pad.
 describe('device for live notes (MIDI and keyboard)', () => {
-  beforeEach(() => initStore(demoProject()));
+  beforeEach(() => initStore(grooveProject()));
 
   it('plays the device selected in the list, not the cursor track', () => {
     store.setUi({ selectedDeviceId: 'dev_pad' });

@@ -1,33 +1,33 @@
 import { describe, expect, it } from 'vitest';
 import { compileSong } from '../compiler/compile';
 import { SCHEMA_VERSION } from '../model/defaults';
-import { demoProject } from '../model/demo';
+import { grooveProject } from '../model/demo';
 import { base64ToInt16, int16ToBase64 } from '../util/base64';
 import { parseProject, serializeProject } from './projectFile';
 import { parseWav } from './wav';
 
 describe('project file', () => {
   it('save and reload gives an identical project and identical IR', () => {
-    const project = demoProject();
+    const project = grooveProject();
     const reloaded = parseProject(serializeProject(project));
     expect(reloaded).toEqual(project);
     expect(JSON.stringify(compileSong(reloaded))).toBe(JSON.stringify(compileSong(project)));
   });
 
   it('rejects files from a newer schema and files without a version', () => {
-    expect(() => parseProject(JSON.stringify({ ...demoProject(), schemaVersion: SCHEMA_VERSION + 1 }))).toThrow(/newer/);
+    expect(() => parseProject(JSON.stringify({ ...grooveProject(), schemaVersion: SCHEMA_VERSION + 1 }))).toThrow(/newer/);
     expect(() => parseProject('{"title":"x"}')).toThrow(/schemaVersion/);
   });
 
   it('fills missing optional settings with defaults', () => {
-    const raw = JSON.parse(serializeProject(demoProject()));
+    const raw = JSON.parse(serializeProject(grooveProject()));
     delete raw.hardware.driverReserve;
     expect(parseProject(JSON.stringify(raw)).hardware.driverReserve).toBe(8192);
   });
 
   it('migrates a schema 1 project: effect lists, main volume L/R, neutral new fields, same IR', () => {
     // Build what a version-1 file looked like from the current demo.
-    const v2 = demoProject();
+    const v2 = grooveProject();
     const v1 = JSON.parse(serializeProject(v2));
     v1.schemaVersion = 1;
     v1.hardware.mainVolume = v1.hardware.mainVolumeL;

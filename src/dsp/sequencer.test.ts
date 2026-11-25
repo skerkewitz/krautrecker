@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildSample } from '../brr/sampleBuild';
 import { compileSong } from '../compiler/compile';
-import { demoProject } from '../model/demo';
+import { demoProject } from '../model/demoSong';
 import { SDsp } from './sdsp';
 import { Sequencer } from './sequencer';
 
@@ -16,12 +16,12 @@ function setup() {
 }
 
 describe('sequencer playing the compiled demo song', () => {
-  it('advances ticks at the tempo: 125 BPM, 4 LPB, 6 TPL = 640 samples per tick', () => {
+  it('advances ticks at the song tempo: the intro starts at 100 BPM (F64), 4 LPB, 6 TPL = 800 samples per tick', () => {
     const { seq } = setup();
     seq.play(0, 0, false);
-    const l = new Float32Array(6400);
-    const r = new Float32Array(6400);
-    seq.render(l, r, 0, 6400);
+    const l = new Float32Array(8000);
+    const r = new Float32Array(8000);
+    seq.render(l, r, 0, 8000);
     expect(seq.tick).toBe(10);
   });
 

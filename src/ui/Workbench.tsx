@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { downloadProject, parseProject } from '../io/projectFile';
 import { emptyProject } from '../model/defaults';
-import { demoProject } from '../model/demo';
+import { demoProject } from '../model/demoSong';
 import type { Project } from '../model/types';
 import { stop } from './actions';
 import { AramMeter, Diagnostics, OrderList, VoiceMeter } from './BottomPanels';

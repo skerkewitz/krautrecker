@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { demoProject } from '../model/demo';
+import { demoProject } from '../model/demoSong';
 import { NOTE_OFF, type Project } from '../model/types';
 import { mulberry32 } from '../util/prng';
 import { compileSong } from './compile';
