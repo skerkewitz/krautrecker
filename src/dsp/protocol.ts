@@ -1,4 +1,5 @@
 import type { IR, KeyOnData } from '../compiler/ir';
+import type { LiveSetup } from './live';
 import type { DspSample } from './sdsp';
 
 /** Messages from the main thread to the DSP worklet. */
@@ -7,9 +8,14 @@ export type ToWorklet =
   | { type: 'ir'; ir: IR }
   | { type: 'play'; from: number; loopStart: number; loop: boolean }
   | { type: 'stop' }
-  /** Auditioning: a separate 8-voice DSP for live play and note entry, mixed on top. */
-  | { type: 'previewOn'; voice: number; keyOn: KeyOnData }
-  | { type: 'previewOff'; voice: number };
+  /** Live play with the device's rules (MIDI, keyboard, zone audition), on its own DSP. */
+  | { type: 'liveSetup'; setup: LiveSetup }
+  | { type: 'liveOn'; deviceId: string; note: number; velocity: number }
+  | { type: 'liveOff'; deviceId: string; note: number }
+  | { type: 'liveAllOff' }
+  /** Raw sample audition at the root note, outside any device. */
+  | { type: 'sampleOn'; keyOn: KeyOnData }
+  | { type: 'sampleOff' };
 
 /** Messages from the DSP worklet to the main thread. */
 export type FromWorklet = { type: 'position'; tick: number; playing: boolean; levels: number[] };

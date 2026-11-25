@@ -82,28 +82,7 @@ export class Sequencer {
         this.applyGlobal(e.ev);
         continue;
       }
-      const ev = e.ev;
-      switch (ev.type) {
-        case 'keyOn':
-          this.dsp.keyOn(e.voice, ev);
-          break;
-        case 'keyOff':
-          this.dsp.keyOff(e.voice);
-          break;
-        case 'setPitch':
-          this.dsp.setPitch(e.voice, ev.pitch);
-          break;
-        case 'setVolume':
-          this.dsp.setVolume(e.voice, ev.volL, ev.volR);
-          break;
-        case 'setEnvelope':
-          this.dsp.setEnvelope(e.voice, ev.envelope);
-          break;
-        case 'noise':
-        case 'pitchMod':
-          // Reserved in the IR; not modelled by the DSP yet.
-          break;
-      }
+      applyVoiceEvent(this.dsp, e.voice, e.ev);
     }
     this.tick++;
     this.frac += this.samplesPerTick;
@@ -124,5 +103,30 @@ export class Sequencer {
       done += chunk;
       if (this.playing) this.samplesLeft -= chunk;
     }
+  }
+}
+
+/** Writes one IR voice event to the DSP's registers. Shared by song playback and live play. */
+export function applyVoiceEvent(dsp: SDsp, voice: number, ev: VoiceEvent): void {
+  switch (ev.type) {
+    case 'keyOn':
+      dsp.keyOn(voice, ev);
+      break;
+    case 'keyOff':
+      dsp.keyOff(voice);
+      break;
+    case 'setPitch':
+      dsp.setPitch(voice, ev.pitch);
+      break;
+    case 'setVolume':
+      dsp.setVolume(voice, ev.volL, ev.volR);
+      break;
+    case 'setEnvelope':
+      dsp.setEnvelope(voice, ev.envelope);
+      break;
+    case 'noise':
+    case 'pitchMod':
+      // Reserved in the IR; not modelled by the DSP yet.
+      break;
   }
 }

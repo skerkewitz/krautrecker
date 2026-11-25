@@ -12,7 +12,8 @@ it does is in [docs/design.md](docs/design.md). Read both before structural chan
    in `src/compiler/`, `src/brr/` or `src/dsp/`. Randomness uses `mulberry32` seeded from
    `project.seed`. The determinism tests in `src/compiler/compile.test.ts` must stay green.
 3. **One playback path.** The song is only ever played from compiled IR through `Sequencer` and `SDsp`.
-   Auditioning uses a second `SDsp` instance with key-on data from `compiler/preview.ts`; never play
+   Live play goes through `LivePlayer`, which reuses the compiler's `TrackProcessor` and
+   `VoiceAllocator`; put device rules there, never in a separate live-only path, and never play
    high-level data directly.
 4. **The core stays pure.** `model`, `compiler`, `brr`, `dsp` (except `worklet.ts`) and `util` must not
    touch the DOM, so they run in tests and in the AudioWorklet.

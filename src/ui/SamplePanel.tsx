@@ -73,8 +73,8 @@ function SampleEditor({ sample }: { sample: Sample }) {
     syncEngine();
     const k = previewSampleKeyOn(store.getState().project, sample.id);
     if (!k) return;
-    await engine.previewOn('sample', k);
-    setTimeout(() => engine.previewOff('sample'), Math.min(4000, (built.length / built.effectiveRate) * 1000 + 300));
+    await engine.sampleOn(k);
+    setTimeout(() => engine.sampleOff(), Math.min(4000, (built.length / built.effectiveRate) * 1000 + 300));
   };
 
   const remove = () => {

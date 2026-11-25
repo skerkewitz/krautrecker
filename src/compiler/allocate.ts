@@ -13,6 +13,9 @@ import { VOICE_COUNT } from './ir';
  *   2. otherwise takes the lowest free voice;
  *   3. otherwise steals: lowest priority first, then voices in release, then the oldest note.
  *      It never steals from a higher-priority device. If nothing qualifies, the note is dropped.
+ *
+ * `VoiceAllocator` holds these rules and is used incrementally both by the compiler (whole song)
+ * and by live play in the worklet, so a live note gets its voice exactly as in playback.
  */
 
 interface VoiceState {
@@ -23,12 +26,141 @@ interface VoiceState {
   freeAt: number;
 }
 
+export interface Assignment {
+  /** The voice the note got, or -1 if it was dropped. */
+  voice: number;
+  /** A note that was still held and lost its voice to this one (a real steal). */
+  stolen: LogicalNote | null;
+  /** True when the steal happened because of the device's own voice limit. */
+  byLimit: boolean;
+}
+
+export class VoiceAllocator {
+  private state: VoiceState[] = Array.from({ length: VOICE_COUNT }, () => ({ note: null, seq: -1, keyOffTick: Infinity, freeAt: 0 }));
+  private voiceOf = new Map<number, number>();
+  private groupLast = new Map<string, LogicalNote>();
+  private seq = 0;
+
+  constructor(
+    private readonly usable: number[],
+    private readonly releaseTicks: number,
+  ) {}
+
+  isFree(v: number, tick: number): boolean {
+    return this.state[v].note === null || tick >= this.state[v].freeAt;
+  }
+
+  /** The voice a note currently owns, or -1. */
+  owns(n: LogicalNote): number {
+    const v = this.voiceOf.get(n.id);
+    return v !== undefined && this.state[v].note === n ? v : -1;
+  }
+
+  private inRelease(v: number, tick: number): boolean {
+    return this.state[v].keyOffTick <= tick;
+  }
+
+  usedAt(tick: number): number {
+    let used = 0;
+    for (const v of this.usable) if (!this.isFree(v, tick)) used++;
+    return used;
+  }
+
+  /** Routes one of a note's own events. Returns the voice it applies to, or -1 if the note lost its voice. */
+  applyEvent(note: LogicalNote, event: VoiceEvent, tick: number): number {
+    const v = this.owns(note);
+    if (v < 0) return -1;
+    if (event.type === 'keyOff') {
+      const s = this.state[v];
+      s.keyOffTick = Math.min(s.keyOffTick, tick);
+      s.freeAt = Math.min(s.freeAt, tick + this.releaseTicks);
+    }
+    return v;
+  }
+
+  /** Finds a voice for a new note by the rules above and assigns it. */
+  assign(note: LogicalNote, tick: number): Assignment {
+    const { usable, state } = this;
+    let v = -1;
+    let reason: 'group' | 'choke' | 'limit' | 'free' | 'steal' = 'free';
+
+    // 1. Device rules.
+    const prev = this.groupLast.get(note.group);
+    if (prev) {
+      const pv = this.owns(prev);
+      if (pv >= 0) {
+        v = pv;
+        reason = 'group';
+      }
+    }
+    if (v < 0 && note.chokeKey) {
+      for (const u of usable) {
+        const owner = state[u].note;
+        if (owner && owner.chokeKey === note.chokeKey && !this.isFree(u, tick)) {
+          v = u;
+          reason = 'choke';
+          break;
+        }
+      }
+    }
+    if (v < 0 && note.limitKey && Number.isFinite(note.maxVoices)) {
+      const own = usable.filter((u) => state[u].note?.limitKey === note.limitKey && !this.isFree(u, tick));
+      if (own.length >= note.maxVoices) {
+        own.sort((x, y) => Number(this.inRelease(y, tick)) - Number(this.inRelease(x, tick)) || state[x].seq - state[y].seq || x - y);
+        v = own[0];
+        reason = 'limit';
+      }
+    }
+    // 2. Lowest free voice.
+    if (v < 0) {
+      for (const u of usable) {
+        if (this.isFree(u, tick)) {
+          v = u;
+          reason = 'free';
+          break;
+        }
+      }
+    }
+    // 3. Steal.
+    if (v < 0) {
+      const candidates = usable.filter((u) => state[u].note!.priority <= note.priority);
+      candidates.sort(
+        (x, y) =>
+          state[x].note!.priority - state[y].note!.priority ||
+          Number(this.inRelease(y, tick)) - Number(this.inRelease(x, tick)) ||
+          state[x].seq - state[y].seq ||
+          x - y,
+      );
+      if (candidates.length > 0) {
+        v = candidates[0];
+        reason = 'steal';
+      }
+    }
+    if (v < 0) return { voice: -1, stolen: null, byLimit: false };
+
+    const old = state[v].note;
+    const stolen =
+      old && (reason === 'steal' || reason === 'limit') && !this.isFree(v, tick) && !this.inRelease(v, tick) && old.heldEnd > tick ? old : null;
+    state[v] = { note, seq: this.seq++, keyOffTick: Infinity, freeAt: note.naturalEnd };
+    this.voiceOf.set(note.id, v);
+    this.groupLast.set(note.group, note);
+    return { voice: v, stolen, byLimit: reason === 'limit' };
+  }
+
+  /** Forgets notes that no longer own a voice. Live play calls this so memory stays bounded. */
+  prune(): void {
+    for (const [group, n] of this.groupLast) if (this.owns(n) < 0) this.groupLast.delete(group);
+    for (const [id, v] of this.voiceOf) if (this.state[v].note?.id !== id) this.voiceOf.delete(id);
+  }
+}
+
 export interface AllocationResult {
   lanes: VoiceEvent[][];
   /** Voices in use at each tick. */
   usedPerTick: Uint8Array;
 }
 
+/** Allocates voices for a whole song and writes the voice lanes of the IR. */
 export function allocateVoices(
   notes: LogicalNote[],
   usable: number[],
@@ -38,14 +170,12 @@ export function allocateVoices(
   describe: (n: LogicalNote) => string,
 ): AllocationResult {
   const lanes: VoiceEvent[][] = Array.from({ length: VOICE_COUNT }, () => []);
-  const state: VoiceState[] = Array.from({ length: VOICE_COUNT }, () => ({ note: null, seq: -1, keyOffTick: Infinity, freeAt: 0 }));
-  const voiceOf = new Map<number, number>();
-  const groupLast = new Map<string, LogicalNote>();
+  const alloc = new VoiceAllocator(usable, releaseTicks);
   const keyOnOut = new Map<number, KeyOnEvent>();
   const usedPerTick = new Uint8Array(Math.max(0, totalTicks));
 
   // Bucket work by tick.
-  type Item = { note: LogicalNote; event: VoiceEvent | null };
+  type Item = { note: LogicalNote; event: VoiceEvent };
   const buckets = new Map<number, { events: Item[]; requests: LogicalNote[] }>();
   const bucket = (t: number) => {
     let b = buckets.get(t);
@@ -58,21 +188,9 @@ export function allocateVoices(
   }
   const ticks = [...buckets.keys()].sort((a, b) => a - b);
 
-  const isFree = (v: number, tick: number) => state[v].note === null || tick >= state[v].freeAt;
-  const owns = (n: LogicalNote) => {
-    const v = voiceOf.get(n.id);
-    return v !== undefined && state[v].note === n ? v : -1;
-  };
-  const inRelease = (v: number, tick: number) => state[v].keyOffTick <= tick;
-
-  let seq = 0;
   let usageTick = 0;
   const recordUsageUntil = (tick: number) => {
-    for (; usageTick < Math.min(tick, totalTicks); usageTick++) {
-      let used = 0;
-      for (const v of usable) if (!isFree(v, usageTick)) used++;
-      usedPerTick[usageTick] = used;
-    }
+    for (; usageTick < Math.min(tick, totalTicks); usageTick++) usedPerTick[usageTick] = alloc.usedAt(usageTick);
   };
 
   for (const tick of ticks) {
@@ -80,73 +198,14 @@ export function allocateVoices(
     const b = buckets.get(tick)!;
     b.events.sort((x, y) => x.note.id - y.note.id);
     for (const { note, event } of b.events) {
-      const v = owns(note);
-      if (v < 0 || !event) continue;
-      lanes[v].push(event);
-      if (event.type === 'keyOff') {
-        state[v].keyOffTick = Math.min(state[v].keyOffTick, tick);
-        state[v].freeAt = Math.min(state[v].freeAt, tick + releaseTicks);
-      }
+      const v = alloc.applyEvent(note, event, tick);
+      if (v >= 0) lanes[v].push(event);
     }
 
     b.requests.sort((x, y) => y.priority - x.priority || x.track - y.track || x.column - y.column || x.id - y.id);
     for (const note of b.requests) {
-      let v = -1;
-      let reason: 'group' | 'choke' | 'limit' | 'free' | 'steal' = 'free';
-
-      // 1. Device rules.
-      const prev = groupLast.get(note.group);
-      if (prev) {
-        const pv = owns(prev);
-        if (pv >= 0) {
-          v = pv;
-          reason = 'group';
-        }
-      }
-      if (v < 0 && note.chokeKey) {
-        for (const u of usable) {
-          const owner = state[u].note;
-          if (owner && owner.chokeKey === note.chokeKey && !isFree(u, tick)) {
-            v = u;
-            reason = 'choke';
-            break;
-          }
-        }
-      }
-      if (v < 0 && note.limitKey && Number.isFinite(note.maxVoices)) {
-        const own = usable.filter((u) => state[u].note?.limitKey === note.limitKey && !isFree(u, tick));
-        if (own.length >= note.maxVoices) {
-          own.sort((x, y) => Number(inRelease(y, tick)) - Number(inRelease(x, tick)) || state[x].seq - state[y].seq || x - y);
-          v = own[0];
-          reason = 'limit';
-        }
-      }
-      // 2. Lowest free voice.
-      if (v < 0) {
-        for (const u of usable) {
-          if (isFree(u, tick)) {
-            v = u;
-            reason = 'free';
-            break;
-          }
-        }
-      }
-      // 3. Steal.
-      if (v < 0) {
-        const candidates = usable.filter((u) => state[u].note!.priority <= note.priority);
-        candidates.sort(
-          (x, y) =>
-            state[x].note!.priority - state[y].note!.priority ||
-            Number(inRelease(y, tick)) - Number(inRelease(x, tick)) ||
-            state[x].seq - state[y].seq ||
-            x - y,
-        );
-        if (candidates.length > 0) {
-          v = candidates[0];
-          reason = 'steal';
-        }
-      }
-      if (v < 0) {
+      const a = alloc.assign(note, tick);
+      if (a.voice < 0) {
         diagnostics.push({
           kind: 'noteDropped',
           severity: 'error',
@@ -156,27 +215,21 @@ export function allocateVoices(
         });
         continue;
       }
-
-      const old = state[v].note;
-      if (old && (reason === 'steal' || reason === 'limit') && !isFree(v, tick) && !inRelease(v, tick) && old.heldEnd > tick) {
+      if (a.stolen) {
         diagnostics.push({
           kind: 'voiceStolen',
           severity: 'warning',
-          message: `Voice ${v} taken from ${describe(old)} by ${describe(note)}${reason === 'limit' ? ' (device voice limit)' : ''}.`,
-          source: old.keyOn.source,
+          message: `Voice ${a.voice} taken from ${describe(a.stolen)} by ${describe(note)}${a.byLimit ? ' (device voice limit)' : ''}.`,
+          source: a.stolen.keyOn.source,
           tick,
-          voice: v,
+          voice: a.voice,
         });
-        const k = keyOnOut.get(old.id);
+        const k = keyOnOut.get(a.stolen.id);
         if (k) k.stolen = true;
       }
-
-      state[v] = { note, seq: seq++, keyOffTick: Infinity, freeAt: note.naturalEnd };
-      voiceOf.set(note.id, v);
-      groupLast.set(note.group, note);
       const keyOn: KeyOnEvent = { ...note.keyOn };
       keyOnOut.set(note.id, keyOn);
-      lanes[v].push(keyOn);
+      lanes[a.voice].push(keyOn);
     }
   }
   recordUsageUntil(totalTicks);

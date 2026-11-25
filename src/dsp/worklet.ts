@@ -1,3 +1,4 @@
+import { LivePlayer } from './live';
 import { SDsp } from './sdsp';
 import { Sequencer } from './sequencer';
 import { DSP_RATE } from './tables';
@@ -16,13 +17,15 @@ const REPORT_EVERY = 1024;
 
 /**
  * Runs the S-DSP model in the audio thread. The song DSP plays the compiled IR through the
- * sequencer; a second DSP handles auditioning so preview notes never disturb song voices.
+ * sequencer. Live play runs the device rules on a second DSP, so live notes never disturb song
+ * voices, and a third DSP auditions raw samples (it only renders while one is sounding).
  * Ideally the AudioContext runs at 32 kHz and samples pass straight through; otherwise this
  * resamples linearly to the context rate.
  */
 class SDspProcessor extends AudioWorkletProcessor {
   private song = new SDsp();
-  private preview = new SDsp();
+  private live = new LivePlayer(new SDsp());
+  private sampleDsp = new SDsp();
   private seq = new Sequencer(this.song);
   private bufL = new Float32Array(BLOCK);
   private bufR = new Float32Array(BLOCK);
@@ -45,11 +48,11 @@ class SDspProcessor extends AudioWorkletProcessor {
     switch (m.type) {
       case 'samples':
         this.song.setSamples(m.samples);
-        this.preview.setSamples(m.samples);
+        this.live.dsp.setSamples(m.samples);
+        this.sampleDsp.setSamples(m.samples);
         break;
       case 'ir':
         this.seq.load(m.ir);
-        for (const g of m.ir.global) if (g.type === 'echo') this.preview.setEcho(g.params);
         break;
       case 'play':
         this.seq.play(m.from, m.loopStart, m.loop);
@@ -57,24 +60,44 @@ class SDspProcessor extends AudioWorkletProcessor {
       case 'stop':
         this.seq.stop();
         break;
-      case 'previewOn':
-        this.preview.keyOn(m.voice, m.keyOn);
+      case 'liveSetup':
+        this.live.setup(m.setup);
         break;
-      case 'previewOff':
-        this.preview.keyOff(m.voice);
+      case 'liveOn':
+        this.live.noteOn(m.deviceId, m.note, m.velocity);
+        break;
+      case 'liveOff':
+        this.live.noteOff(m.deviceId, m.note);
+        break;
+      case 'liveAllOff':
+        this.live.allNotesOff();
+        break;
+      case 'sampleOn':
+        this.sampleDsp.keyOn(0, m.keyOn);
+        break;
+      case 'sampleOff':
+        this.sampleDsp.keyOff(0);
         break;
     }
   }
 
-  /** Produces the next 32 kHz block (song + preview mixed). */
+  /** Produces the next 32 kHz block (song, live play and sample audition mixed). */
   private refill(): void {
     this.seq.render(this.bufL, this.bufR, 0, BLOCK);
-    this.preview.render(this.prevL, this.prevR, 0, BLOCK);
+    this.live.render(this.prevL, this.prevR, 0, BLOCK);
+    this.mix();
+    if (this.sampleDsp.active) {
+      this.sampleDsp.render(this.prevL, this.prevR, 0, BLOCK);
+      this.mix();
+    }
+    this.avail = BLOCK;
+  }
+
+  private mix(): void {
     for (let i = 0; i < BLOCK; i++) {
       this.bufL[i] += this.prevL[i];
       this.bufR[i] += this.prevR[i];
     }
-    this.avail = BLOCK;
   }
 
   process(_inputs: Float32Array[][], outputs: Float32Array[][]): boolean {

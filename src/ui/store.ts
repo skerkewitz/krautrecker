@@ -153,9 +153,26 @@ class Store {
 
   setUi(patch: Partial<UiState> | ((ui: UiState) => Partial<UiState>)): void {
     const p = typeof patch === 'function' ? patch(this.state.ui) : patch;
-    this.state = { ...this.state, ui: { ...this.state.ui, ...p } };
+    const ui = { ...this.state.ui, ...p };
+    // Moving the cursor to another track selects that track's device, so the device highlighted
+    // in the list is always the one live notes play. Playback following does not move the cursor,
+    // so it never overrides a device the user picked.
+    if (p.cursor && p.selectedDeviceId === undefined) {
+      const old = this.state.ui;
+      if (p.cursor.track !== old.cursor.track || ui.currentPatternId !== old.currentPatternId) {
+        const deviceId = this.state.project.patterns.find((x) => x.id === ui.currentPatternId)?.tracks[ui.cursor.track]?.deviceId;
+        if (deviceId) ui.selectedDeviceId = deviceId;
+      }
+    }
+    this.state = { ...this.state, ui };
     this.emit();
   }
+}
+
+/** The device live notes (MIDI, keyboard in play mode) play: the selected one, else the cursor track's. */
+export function liveDeviceId(s: AppState): string | null {
+  if (s.ui.selectedDeviceId && s.project.devices.some((d) => d.id === s.ui.selectedDeviceId)) return s.ui.selectedDeviceId;
+  return currentPattern(s)?.tracks[s.ui.cursor.track]?.deviceId ?? null;
 }
 
 function initialUi(project: Project): UiState {

@@ -83,7 +83,8 @@ export interface LogicalNote {
 }
 
 export interface ExpandContext {
-  project: Project;
+  /** Only the seed is needed here; live play passes just that. */
+  project: Pick<Project, 'seed'>;
   tpl: number;
   samplesPerTick: number;
   devices: Map<string, Device>;
@@ -166,7 +167,7 @@ export function expandTrack(ctx: ExpandContext, trackIndex: number, song: SongPa
   proc.finish(song.length ? song[song.length - 1].startTick + song[song.length - 1].pattern.lines * ctx.tpl : 0);
 }
 
-class TrackProcessor {
+export class TrackProcessor {
   private device: Device | null = null;
   private deviceId: string | null | undefined = undefined;
   private sp: SongPattern | null = null;
@@ -218,6 +219,11 @@ class TrackProcessor {
         });
       }
     }
+  }
+
+  /** Live play: picks up edited settings of the same device without cutting held notes. */
+  refreshDevice(): void {
+    if (this.deviceId) this.device = this.ctx.devices.get(this.deviceId) ?? null;
   }
 
   lineStart(): void {
@@ -363,6 +369,14 @@ class TrackProcessor {
 
   /** Per-tick work after this tick's cells: arpeggiator, effects, then emit events. */
   tick(tick: number, lineTick: number): void {
+    // A one-shot sample that has finished needs no further updates: stop tracking it, so drum
+    // hits do not pile up for the rest of the song.
+    for (const a of [...this.actives]) {
+      if (a.ln && tick >= a.ln.naturalEnd) {
+        a.ln.heldEnd = Math.min(a.ln.heldEnd, a.ln.naturalEnd);
+        this.drop(a);
+      }
+    }
     const device = this.device;
     if (device?.mode === 'arp') this.arpTick(device, tick);
 

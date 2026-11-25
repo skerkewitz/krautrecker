@@ -208,6 +208,11 @@ export class SDsp {
     this.echoParams = { ...p, fir: p.fir.slice(0, 8) };
   }
 
+  /** True while any voice is sounding. */
+  get active(): boolean {
+    return this.voices.some((v) => !v.idle);
+  }
+
   /** Current envelope level of a voice, 0..0x7FF (for meters). */
   envelopeLevel(voice: number): number {
     const v = this.voices[voice];

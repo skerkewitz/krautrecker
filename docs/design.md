@@ -109,16 +109,28 @@ The AudioContext is created at 32 kHz, the S-DSP's own rate, so samples reach th
 the browser resamples to the output device. If a browser refuses that rate, the worklet resamples
 linearly instead.
 
-## Auditioning uses a second DSP
+## Live play runs the compiler's device rules in real time
 
-Live MIDI play, note entry and sample previews must not disturb the eight song voices, and they must
-not bypass the compiler's rules either. So the worklet runs a second `SDsp` for auditioning, mixed on
-top of the song. Its key-on data comes from `compiler/preview.ts`, which uses the compiler's own zone
-selection, pitch and volume functions, so a preview sounds like the same note in playback. The song
+Notes played live (MIDI, the computer keyboard, zone audition) must sound the way the same notes sound
+in the song, so a mono device must stay mono and an arp device must arpeggiate. Writing a second set of
+device rules for live play would let the two drift apart. Instead `LivePlayer` (`src/dsp/live.ts`)
+runs the compiler's own stage 2 (`TrackProcessor`) and stage 3 (`VoiceAllocator`) inside the
+worklet, one tick at a time at the song's tempo, and writes the resulting events to its own `SDsp`.
+That DSP is mixed on top of the song, so live notes never take one of the song's eight voices. The song
 itself is still only played from compiled IR, as principle 3 requires.
 
-A preview is a single plain note: arpeggio, legato and voice limits do not apply to it. Making live play
-follow the device modes would mean running stage 2 in real time, which is a larger change.
+Each device being played gets one track processor, and keys become the same column entries a pattern
+would contain: in poly, arp and drum mode each held key occupies a note column, and releasing it writes
+a note-off. Two keyboard conventions are added on top, because a held key is not a tracker cell. In
+mono and legato mode, releasing the sounding key falls back to the most recent key still held, as on a
+monophonic synthesizer. And one-shot drum hits ignore key release and ring out, as on a drum machine.
+
+A key pressed between two audio blocks plays at the start of the next block rather than at the next
+tick boundary, which keeps latency at one block (4 ms) instead of up to one tick (20 ms). Editing a
+device while holding notes applies to the held notes; changing its mode ends them.
+
+Raw sample audition in the sample panel bypasses devices on purpose, so it uses a third, small `SDsp`
+that renders only while a sample is sounding.
 
 ## Effects are one byte and last one line
 

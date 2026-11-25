@@ -1,5 +1,6 @@
 import type { BuiltSample } from '../brr/sampleBuild';
 import type { IR, KeyOnData } from '../compiler/ir';
+import type { LiveSetup } from '../dsp/live';
 import type { DspSample } from '../dsp/sdsp';
 import { PROCESSOR_NAME, type FromWorklet, type ToWorklet } from '../dsp/protocol';
 import { DSP_RATE } from '../dsp/tables';
@@ -23,8 +24,7 @@ export class AudioEngine {
   private lastSamples: BuiltSample[] | null = null;
   private lastIR: IR | null = null;
   private listeners = new Set<(p: PlayPosition) => void>();
-  private previewVoice = 0;
-  private previewHeld = new Map<string, number>();
+  private lastLive: LiveSetup | null = null;
 
   get contextRate(): number | null {
     return this.ctx?.sampleRate ?? null;
@@ -56,6 +56,7 @@ export class AudioEngine {
       this.node = node;
       if (this.lastSamples) this.send({ type: 'samples', samples: toDsp(this.lastSamples) });
       if (this.lastIR) this.send({ type: 'ir', ir: this.lastIR });
+      if (this.lastLive) this.send({ type: 'liveSetup', setup: this.lastLive });
       if (ctx.state === 'suspended') await ctx.resume();
     })();
     return this.starting;
@@ -90,21 +91,34 @@ export class AudioEngine {
     this.send({ type: 'stop' });
   }
 
-  /** Auditions a note on the preview DSP. `key` identifies the held key for the matching release. */
-  async previewOn(key: string, keyOn: KeyOnData): Promise<void> {
-    await this.ensureStarted();
-    const old = this.previewHeld.get(key);
-    const voice = old ?? this.previewVoice;
-    if (old === undefined) this.previewVoice = (this.previewVoice + 1) % 8;
-    this.previewHeld.set(key, voice);
-    this.send({ type: 'previewOn', voice, keyOn });
+  /** Device and sample data live play needs; sent whenever it changes. */
+  setLive(setup: LiveSetup): void {
+    this.lastLive = setup;
+    this.send({ type: 'liveSetup', setup });
   }
 
-  previewOff(key: string): void {
-    const voice = this.previewHeld.get(key);
-    if (voice === undefined) return;
-    this.previewHeld.delete(key);
-    this.send({ type: 'previewOff', voice });
+  /** Plays a note live on a device, with the device's mode rules. */
+  async liveOn(deviceId: string, note: number, velocity: number): Promise<void> {
+    await this.ensureStarted();
+    this.send({ type: 'liveOn', deviceId, note, velocity });
+  }
+
+  liveOff(deviceId: string, note: number): void {
+    this.send({ type: 'liveOff', deviceId, note });
+  }
+
+  liveAllOff(): void {
+    this.send({ type: 'liveAllOff' });
+  }
+
+  /** Auditions a raw sample (outside any device) until `sampleOff`. */
+  async sampleOn(keyOn: KeyOnData): Promise<void> {
+    await this.ensureStarted();
+    this.send({ type: 'sampleOn', keyOn });
+  }
+
+  sampleOff(): void {
+    this.send({ type: 'sampleOff' });
   }
 }
 
