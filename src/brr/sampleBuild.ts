@@ -2,6 +2,7 @@ import type { Sample, SampleId } from '../model/types';
 import { base64ToInt16 } from '../util/base64';
 import { encodeBrr } from './brr';
 import { resample } from './resample';
+import { highestSignificantFrequency } from './spectrum';
 
 /**
  * A sample as the hardware sees it: BRR data plus what the compiler needs to compute pitch and
@@ -21,6 +22,11 @@ export interface BuiltSample {
   effectiveRate: number;
   /** Human-readable notes about changes the build had to make (loop realignment). */
   notes: string[];
+  /**
+   * Highest significant frequency in Hz when played at `effectiveRate` (the loop for looping
+   * samples), for the aliasing check; 0 for silence. Absent where no PCM was analysed (live play).
+   */
+  highestFrequency?: number;
 }
 
 const cache = new Map<string, BuiltSample>();
@@ -61,7 +67,8 @@ export function buildSampleUncached(sample: Sample): BuiltSample {
     const padded = new Int16Array(Math.max(16, Math.ceil(res.length / 16) * 16));
     padded.set(res);
     const enc = encodeBrr(padded, null);
-    return { sampleId: sample.id, brr: enc.data, loopBlock: -1, length: padded.length, effectiveRate: target, notes };
+    const highestFrequency = highestSignificantFrequency(padded, target, false);
+    return { sampleId: sample.id, brr: enc.data, loopBlock: -1, length: padded.length, effectiveRate: target, notes, highestFrequency };
   }
 
   // The hardware can only loop to a block boundary, and the loop end is always a block end.
@@ -86,5 +93,6 @@ export function buildSampleUncached(sample: Sample): BuiltSample {
     );
   }
   const enc = encodeBrr(pcm, alignedStart);
-  return { sampleId: sample.id, brr: enc.data, loopBlock: enc.loopBlock, length: pcm.length, effectiveRate, notes };
+  const highestFrequency = highestSignificantFrequency(pcm.subarray(alignedStart), effectiveRate, true);
+  return { sampleId: sample.id, brr: enc.data, loopBlock: enc.loopBlock, length: pcm.length, effectiveRate, notes, highestFrequency };
 }

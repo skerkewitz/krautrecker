@@ -89,16 +89,31 @@ export type DiagnosticKind =
   | 'aramOverBudget'
   | 'noiseClockConflict'
   | 'noiseOneShot'
-  | 'pitchModUnavailable';
+  | 'pitchModUnavailable'
+  | 'aliasing'
+  | 'detune'
+  | 'chordClash'
+  | 'outsideKey'
+  | 'registerCrowding';
 
-export interface Diagnostic {
+interface DiagnosticBase {
   kind: DiagnosticKind;
-  severity: 'info' | 'warning' | 'error';
   message: string;
   source?: SourceRef;
   tick?: number;
   voice?: number;
 }
+
+/**
+ * A finding of the compiler. 'hardware' diagnostics are about what the S-DSP can do (voices,
+ * ARAM, pitch range, aliasing); 'music' diagnostics are hints about the music itself (tuning,
+ * harmony, register). A musical hint is always 'info': the type allows nothing else, because taste
+ * must never show up as a problem count.
+ */
+export type Diagnostic = DiagnosticBase &
+  ({ category: 'hardware'; severity: 'info' | 'warning' | 'error' } | { category: 'music'; severity: 'info' });
+
+export type DiagnosticCategory = Diagnostic['category'];
 
 export interface LineInfo {
   orderIndex: number;

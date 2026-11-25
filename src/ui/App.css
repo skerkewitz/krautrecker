@@ -846,6 +846,16 @@ legend {
   border-left-color: #6c7a96;
   color: var(--dim);
 }
+.diag.music {
+  border-left-color: #7d9a6c;
+}
+.diag-toggle {
+  margin-left: 12px;
+  cursor: pointer;
+}
+.diag-toggle input {
+  vertical-align: -2px;
+}
 .diag .where {
   font-family: Consolas, monospace;
   color: var(--dim);

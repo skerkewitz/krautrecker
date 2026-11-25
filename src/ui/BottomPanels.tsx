@@ -239,9 +239,12 @@ export function AramMeter() {
 
 export function Diagnostics() {
   const project = useStore((s) => s.project);
-  const diags = useMemo(() => store.songIR().diagnostics, [project]);
-  const counts = { error: 0, warning: 0, info: 0 };
-  for (const d of diags) counts[d.severity]++;
+  const all = useMemo(() => store.songIR().diagnostics, [project]);
+  // Musical hints (tuning, harmony, register) are advice, not hardware problems: they can be hidden.
+  const [showMusic, setShowMusic] = useState(true);
+  const diags = showMusic ? all : all.filter((d) => d.category !== 'music');
+  const counts = { error: 0, warning: 0, info: 0, music: 0 };
+  for (const d of all) counts[d.category === 'music' ? 'music' : d.severity]++;
   const jump = (d: Diagnostic) => {
     if (!d.source) return;
     store.setUi({
@@ -255,13 +258,16 @@ export function Diagnostics() {
     <div className="pane diagnostics">
       <div className="pane-summary">
         <span className="dim">
-          {counts.error} errors · {counts.warning} warnings · {counts.info} notes
+          {counts.error} errors · {counts.warning} warnings · {counts.info} notes · {counts.music} musical hints
         </span>
+        <label className="diag-toggle" title="Hints about tuning, harmony and register. They never count as problems.">
+          <input type="checkbox" checked={showMusic} onChange={(e) => setShowMusic(e.target.checked)} /> Show musical hints
+        </label>
       </div>
       <div className="diag-list">
         {diags.length === 0 && <div className="dim">Everything fits on the hardware.</div>}
         {diags.slice(0, 300).map((d, i) => (
-          <div key={i} className={`diag ${d.severity}${d.source ? ' link' : ''}`} onClick={() => jump(d)}>
+          <div key={i} className={`diag ${d.severity} ${d.category}${d.source ? ' link' : ''}`} onClick={() => jump(d)}>
             {d.source && <span className="where">{`${hex(d.source.orderIndex, 2)}:${hex(d.source.line, 2)} T${d.source.track + 1}`}</span>}
             {d.message}
           </div>

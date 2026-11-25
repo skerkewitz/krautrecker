@@ -60,6 +60,7 @@ function diagnoseOneShot(ctx: ExpandContext, a: NoiseTarget, tick: number): void
   ctx.diagnostics.push({
     kind: 'noiseOneShot',
     severity: 'info',
+    category: 'hardware',
     message: `"${a.device.name}" plays noise over the one-shot sample "${a.sample.name}". A noise voice still runs its sample, so the noise stops when the sample ends; loop the sample for sustained noise.`,
     source: a.source,
     tick,
@@ -178,6 +179,7 @@ export class ChipVoices {
         this.report(`pmod:${note.id}`, {
           kind: 'pitchModUnavailable',
           severity: 'warning',
+          category: 'hardware',
           message: `${this.describe(note)} plays without pitch modulation: no voice was free directly above a voice playing its source device.`,
           source,
           tick,
@@ -197,6 +199,7 @@ export class ChipVoices {
           this.report(`pmodlost:${above.id}:${note.id}`, {
             kind: 'pitchModUnavailable',
             severity: 'warning',
+            category: 'hardware',
             message: `${this.describe(above)} loses its pitch modulation: ${this.describe(note)} took the voice below it.`,
             source: above.keyOn.source,
             tick,
@@ -235,6 +238,7 @@ export class ChipVoices {
       this.report(`noiseclk:${last.note.id}:${note.id}`, {
         kind: 'noiseClockConflict',
         severity: 'warning',
+        category: 'hardware',
         message: `${this.describe(note)} wants noise clock ${describeNoiseClock(clock)}, but ${this.describe(last.note)} sets ${describeNoiseClock(last.clock)} on the same tick. The noise clock is global, so both play at ${describeNoiseClock(last.clock)}.`,
         source: note.keyOn.source,
         tick,
@@ -253,6 +257,7 @@ export class ChipVoices {
       this.report(`noiseclk:${other.id}:${note.id}`, {
         kind: 'noiseClockConflict',
         severity: 'warning',
+        category: 'hardware',
         message: `${this.describe(note)} sets the noise clock to ${describeNoiseClock(clock)} while ${this.describe(other)} plays noise at ${describeNoiseClock(this.clock[w])}. The noise clock is global, so the last write wins for both.`,
         source: note.keyOn.source,
         tick,

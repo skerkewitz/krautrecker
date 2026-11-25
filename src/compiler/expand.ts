@@ -72,6 +72,8 @@ export interface LogicalNote {
   /** Notes of the same group take over each other's voice (mono, arp, one poly column). */
   group: string;
   deviceId: string;
+  /** The zone that plays this note (read by the musical and aliasing checks). */
+  zone: Zone;
   priority: number;
   /** Device-wide voice limit (poly/drum), keyed by device. */
   limitKey: string | null;
@@ -240,6 +242,7 @@ export class TrackProcessor {
         diagnoseOnce(this.ctx, `nodev:${sp.pattern.id}:${this.track}`, {
           kind: 'noDevice',
           severity: 'warning',
+          category: 'hardware',
           message: `Track ${this.track + 1} in pattern "${sp.pattern.name}" uses a device that no longer exists.`,
           source: this.src(0, 0),
           tick: sp.startTick,
@@ -275,6 +278,7 @@ export class TrackProcessor {
         diagnoseOnce(this.ctx, `nodevnote:${this.sp!.pattern.id}:${this.track}`, {
           kind: 'noDevice',
           severity: 'warning',
+          category: 'hardware',
           message: `Track ${this.track + 1} in pattern "${this.sp!.pattern.name}" has notes but no device.`,
           source,
           tick,
@@ -540,6 +544,7 @@ export class TrackProcessor {
       diagnoseOnce(ctx, `nozones:${device.id}`, {
         kind: 'noZone',
         severity: 'warning',
+        category: 'hardware',
         message: `Device "${device.name}" has no zones, so its notes are silent.`,
         source,
         tick,
@@ -550,6 +555,7 @@ export class TrackProcessor {
       diagnoseOnce(ctx, `nozone:${device.id}:${note}`, {
         kind: 'noZone',
         severity: 'warning',
+        category: 'hardware',
         message: `No zone of "${device.name}" covers ${noteName(note)}; using the zone with the nearest root note.`,
         source,
         tick,
@@ -562,6 +568,7 @@ export class TrackProcessor {
       diagnoseOnce(ctx, `nosample:${device.id}:${zone.sampleId}`, {
         kind: 'noSample',
         severity: 'warning',
+        category: 'hardware',
         message: `A zone of "${device.name}" points to a missing sample.`,
         source,
         tick,
@@ -614,6 +621,7 @@ export class TrackProcessor {
       diagnoseOnce(ctx, `clamp:${dev.id}:${Math.round(a.pitch)}`, {
         kind: 'pitchClamped',
         severity: 'warning',
+        category: 'hardware',
         message: `${noteName(Math.round(a.pitch))} on "${dev.name}" is out of the pitch register's range (max about 2 octaves above the sample's root); clamped. Add a higher zone.`,
         source: a.source,
         tick,
@@ -642,6 +650,7 @@ export class TrackProcessor {
         column: a.column,
         group: a.group,
         deviceId: dev.id,
+        zone: a.zone,
         priority: dev.priority,
         limitKey: poly ? dev.id : null,
         maxVoices: poly ? Math.max(1, dev.maxVoices) : Infinity,
