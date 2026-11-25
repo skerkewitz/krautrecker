@@ -4,7 +4,9 @@ import { NOTE_CUT, NOTE_OFF } from '../model/types';
 import { noteName } from '../model/notes';
 import { hashString, mulberry32 } from '../util/prng';
 import { pitchFor, playLengthSamples, selectZone, stereoVolume, toDspEnvelope, zoneRoot } from './instrument';
+import { FxMemory } from './fxMemory';
 import type { Diagnostic, GlobalEvent, KeyOnEvent, SourceRef, VoiceEvent } from './ir';
+import { TrackMix } from './trackFx';
 
 /**
  * Stages 1 and 2 of the compiler.
@@ -182,6 +184,10 @@ export class TrackProcessor {
   /** Per column: the effects of the current line (one per effect column that is set). */
   private colFx: (Effect[] | null)[] = [];
   private fxTargets: Map<Active, Effect[]> = new Map();
+  /** Effect memory (00 repeats the last value), resolved before any effect is applied. */
+  private readonly memory = new FxMemory();
+  /** Track volume, pan and transpose: static per pattern, changed by track effects. */
+  private readonly mix = new TrackMix();
   // Arp state.
   private held: (HeldKey | null)[] = [];
   private heldOrder = 0;
@@ -202,6 +208,7 @@ export class TrackProcessor {
   enterPattern(sp: SongPattern): void {
     this.sp = sp;
     const t = sp.pattern.tracks[this.track];
+    if (this.mix.enterPattern(t)) this.touchAll();
     const id = t ? t.deviceId : undefined;
     if (id !== this.deviceId) {
       // A different device (or no track) takes over this channel: end what was playing.
@@ -240,10 +247,10 @@ export class TrackProcessor {
   entry(en: Entry, tick: number): void {
     const source = this.src(en.line, en.column);
     if (en.kind === 'fx') {
-      this.colFx[en.column] = (en.cell.fx ?? []).filter((e): e is Effect => !!e);
+      this.colFx[en.column] = this.memory.resolve(en.column, (en.cell.fx ?? []).filter((e): e is Effect => !!e));
       return;
     }
-    const cell = en.cell;
+    const cell = this.mix.transposeCell(en.cell);
     const device = this.device;
     if (!device) {
       if (typeof cell.note === 'number' && this.sp!.pattern.tracks[this.track]?.deviceId == null) {
@@ -382,6 +389,8 @@ export class TrackProcessor {
     }
     const device = this.device;
     if (device?.mode === 'arp') this.arpTick(device, tick);
+    // Track effects (M, K, X) act on the track itself, with or without a sounding note.
+    if (this.mix.tick(this.colFx, lineTick)) this.touchAll();
 
     // Effects of the current line, applied to the note each column controls.
     this.fxTargets.clear();
@@ -444,6 +453,9 @@ export class TrackProcessor {
       }
       case 'volSlide':
         a.vol = Math.max(0, Math.min(127, a.vol + (v >> 4) - (v & 15)));
+        break;
+      case 'panSlide':
+        a.pan = Math.max(-64, Math.min(63, a.pan + (v >> 4) - (v & 15)));
         break;
       case 'cut':
         if (lineTick === v) this.release(a, tick, a.source, true);
@@ -559,9 +571,9 @@ export class TrackProcessor {
       vib = dev.vibrato.depth * Math.sin((2 * Math.PI * (a.age - dev.vibrato.delay)) / Math.max(1, dev.vibrato.rate));
     }
     a.age++;
-    const { pitch, clamped } = pitchFor(a.pitch + a.vibFx + vib, a.root, a.sample.fineTune, a.built);
-    const volume = Math.round((dev.volume * a.zone.volume * a.vol) / (127 * 127));
-    const { volL, volR } = stereoVolume(volume, dev.pan + a.zone.pan + a.pan);
+    const { pitch, clamped } = pitchFor(a.pitch + a.vibFx + vib, a.root, a.sample.fineTune + dev.fineTune, a.built);
+    const volume = Math.round((dev.volume * a.zone.volume * a.vol * this.mix.volume) / (127 * 127 * 127));
+    const { volL, volR } = stereoVolume(volume, dev.pan + a.zone.pan + a.pan + this.mix.pan);
     if (clamped) {
       diagnoseOnce(ctx, `clamp:${dev.id}:${Math.round(a.pitch)}`, {
         kind: 'pitchClamped',
@@ -622,6 +634,11 @@ export class TrackProcessor {
     a.lastVolL = volL;
     a.lastVolR = volR;
     a.cellTouched = false;
+  }
+
+  /** Marks every sounding note as changed by the composer this tick (its events are not `auto`). */
+  private touchAll(): void {
+    for (const a of this.actives) a.cellTouched = true;
   }
 
   /** Key-off: the note releases (on hardware the release takes about 8 ms). */

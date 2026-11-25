@@ -145,7 +145,10 @@ const SHORTCUTS: [string, string][] = [
   ['Shift+Space', 'Play pattern (looped)'],
   ['Enter', 'Play from the cursor'],
   ['Ctrl+B / Ctrl+J / Ctrl+Alt+B', 'Toggle left sidebar / panel / IR view'],
-  ['U D P V A C R', 'Effects: slide up/down, porta, vibrato, volume slide, cut, retrigger'],
+  ['U D P V T A L C R G N', 'Note effects: slide up/down, porta, vibrato, tremolo, volume/pan slide, cut, retrigger, GAIN, noise'],
+  ['M K X', 'Track effects: volume, volume slide, pan (until the pattern ends)'],
+  ['F W H E Y B Z', 'Global effects: tempo, main volume (slide), echo volume (slide), echo feedback, echo write'],
+  ['00 after U D P V T A L R K H Y', 'Repeat the last value of that effect in the column (V, T: per digit)'],
 ];
 
 function ShortcutsDialog({ onClose }: { onClose: () => void }) {
