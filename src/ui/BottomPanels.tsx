@@ -4,6 +4,7 @@ import { emptyCells, newPattern, newTrack } from '../model/defaults';
 import { hex } from '../model/notes';
 import type { Pattern } from '../model/types';
 import { newId } from '../util/base64';
+import { clonePattern } from './harmonyEdit';
 import { loopAfterInsert, loopAfterRemove, loopAfterSwap } from './orderEdit';
 import { store, useStore } from './store';
 import { prepareCanvas, theme } from './theme';
@@ -32,7 +33,7 @@ export function OrderList() {
   const addPattern = (clone: boolean) => {
     const cur = project.patterns.find((p) => p.id === ui.currentPatternId);
     let pat: Pattern;
-    if (clone && cur) pat = { ...structuredClone(cur), id: newId('pat'), name: `${cur.name} copy` };
+    if (clone && cur) pat = clonePattern(cur, newId('pat'), `${cur.name} copy`, () => newId('cmt'));
     else {
       const lines = cur?.lines ?? 64;
       const tracks = cur ? cur.tracks.map((t) => ({ ...newTrack(t.deviceId, t.noteColumns, lines), cells: emptyCells(lines, t.noteColumns) })) : [newTrack(null, 1, 64)];

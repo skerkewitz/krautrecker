@@ -2,8 +2,11 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { IR } from '../compiler/ir';
 import { newTrack } from '../model/defaults';
 import { FX_LETTERS, hex, noteName } from '../model/notes';
-import { FX_COLUMNS, NOTE_CUT, NOTE_OFF, type Cell, type Pattern, type Track } from '../model/types';
+import { FX_COLUMNS, NOTE_CUT, NOTE_OFF, type Cell, type ChordMarker, type Pattern, type Track } from '../model/types';
 import { auditionOff, auditionOn, playFromCursor, playPattern, togglePlay } from './actions';
+import { CHORD_LANE_CHARS, drawAnnotations, LINE_NUMBER_CHARS } from './annotationCanvas';
+import { openChordEditor, openCommentEditor } from './annotationEditor';
+import { AnnotationOverlay, type HoverTarget } from './AnnotationOverlay';
 import { FX_LETTER_SUMMARY, fxHelpText } from './fxHelp';
 import {
   backspaceLine,
@@ -21,13 +24,16 @@ import {
   selectionRect,
   setCursor,
 } from './patternEdit';
+import { CursorComment, KeyPicker, NoteInfo } from './HarmonyBar';
+import { chordInForce, commentsAfterTrackDelete, dropAnnotationsPast } from './harmonyEdit';
 import { clonePatternCells, Field, FIELD_COUNT, fxField, store, updatePattern, useStore } from './store';
 import { measureChar, prepareCanvas, theme } from './theme';
 import { NumberInput } from './widgets';
 
 /** Characters per note column: "C-4 7F 40 0 U08 V23" plus a gap. */
 const COL_CHARS = 20;
-const GUTTER_CHARS = 4;
+/** Line numbers, then the chord lane. */
+const GUTTER_CHARS = LINE_NUMBER_CHARS + CHORD_LANE_CHARS;
 const HEADER_H = 66;
 /** Character offset of each field inside a note column. */
 const FIELD_X = [0, 4, 5, 7, 8, 10, 12, 13, 14, 16, 17, 18];
@@ -35,6 +41,16 @@ const FIELD_W = [3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
 
 function trackChars(cols: number): number {
   return cols * COL_CHARS + 1;
+}
+
+/** Start of each track in chars, after the gutter. */
+function trackStarts(pat: Pattern): number[] {
+  let x = GUTTER_CHARS;
+  return pat.tracks.map((t) => {
+    const start = x;
+    x += trackChars(t.noteColumns);
+    return start;
+  });
 }
 
 /** Cells the compiler flagged (stolen voice, clamped pitch...), keyed "pattern:track:line:col". */
@@ -61,6 +77,7 @@ export function PatternEditor() {
   const [size, setSize] = useState({ w: 600, h: 400 });
   const [cw, setCw] = useState(8);
   const dragging = useRef(false);
+  const [hover, setHover] = useState<HoverTarget | null>(null);
 
   useLayoutEffect(() => {
     const el = scrollRef.current!;
@@ -89,12 +106,15 @@ export function PatternEditor() {
   const totalChars = GUTTER_CHARS + (pattern?.tracks.reduce((a, t) => a + trackChars(t.noteColumns), 0) ?? 0);
   const canvasW = Math.max(size.w, totalChars * cw + 8);
   const canvasH = Math.max(50, size.h - HEADER_H - 14);
+  const rows = Math.floor(canvasH / theme.lineHeight);
+  const first = centerLine - Math.floor(rows / 2);
+  const carried = pattern ? chordInForce(project, pattern, ui.orderIndex, -1) : null;
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !pattern) return;
     const ctx = prepareCanvas(canvas, canvasW, canvasH);
-    drawPattern(ctx, canvasW, canvasH, cw, pattern, ui, centerLine, playLine, marks, project.timing.linesPerBeat);
+    drawPattern(ctx, canvasW, canvasH, cw, pattern, ui, centerLine, playLine, marks, project.timing.linesPerBeat, carried);
   });
 
   // Keep the cursor's track scrolled into view.
@@ -114,13 +134,12 @@ export function PatternEditor() {
     const rect = canvasRef.current!.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    const rows = Math.floor(canvasH / theme.lineHeight);
-    const line = centerLine - Math.floor(rows / 2) + Math.floor(y / theme.lineHeight);
+    const line = first + Math.floor(y / theme.lineHeight);
     let c = Math.floor(x / cw) - GUTTER_CHARS;
     for (let t = 0; t < pattern.tracks.length; t++) {
       const tc = trackChars(pattern.tracks[t].noteColumns);
       if (c < tc) {
-        const column = Math.min(pattern.tracks[t].noteColumns - 1, Math.floor(c / COL_CHARS));
+        const column = Math.max(0, Math.min(pattern.tracks[t].noteColumns - 1, Math.floor(c / COL_CHARS)));
         const off = c - column * COL_CHARS;
         let field = 0;
         for (let f = 0; f < FIELD_COUNT; f++) if (off >= FIELD_X[f]) field = f;
@@ -139,9 +158,26 @@ export function PatternEditor() {
     dragging.current = true;
   };
   const onMouseMove = (e: React.MouseEvent) => {
+    trackHover(e);
     if (!dragging.current || !(e.buttons & 1)) return;
     const h = hit(e);
     if (h) setCursor(h, true);
+  };
+  // What the mouse is over (line numbers, chord lane or a track), for the comment and chord tooltip.
+  const trackHover = (e: React.MouseEvent) => {
+    const rect = canvasRef.current!.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const line = first + Math.floor((e.clientY - rect.top) / theme.lineHeight);
+    const h = hit(e);
+    const area: HoverTarget['area'] = x < LINE_NUMBER_CHARS * cw ? 'gutter' : x < GUTTER_CHARS * cw ? 'lane' : 'track';
+    const next = h && h.line === line ? { line, area, track: h.track } : null;
+    if (next?.line !== hover?.line || next?.area !== hover?.area || next?.track !== hover?.track) setHover(next);
+  };
+  // Double-clicking the chord lane edits the marker at that line.
+  const onDoubleClick = (e: React.MouseEvent) => {
+    const h = hit(e);
+    const x = e.clientX - canvasRef.current!.getBoundingClientRect().left;
+    if (h && x >= LINE_NUMBER_CHARS * cw && x < GUTTER_CHARS * cw) openChordEditor(h.line);
   };
   const onWheel = (e: React.WheelEvent) => {
     moveCursor(Math.sign(e.deltaY) * (e.shiftKey ? 8 : 2), 0);
@@ -152,7 +188,9 @@ export function PatternEditor() {
       <PatternBar pattern={pattern} />
       <div className="pe-scroll" ref={scrollRef}>
         <div className="pe-headers" style={{ width: canvasW, height: HEADER_H }}>
-          <div style={{ width: GUTTER_CHARS * cw }} />
+          <div className="pe-gutter-head" style={{ width: GUTTER_CHARS * cw, paddingLeft: LINE_NUMBER_CHARS * cw }} title="Chord markers (Ctrl+K)">
+            chord
+          </div>
           {pattern.tracks.map((t, i) => (
             <TrackHeader key={i} pattern={pattern} index={i} width={trackChars(t.noteColumns) * cw} active={i === ui.cursor.track} />
           ))}
@@ -166,8 +204,11 @@ export function PatternEditor() {
           onMouseDown={onMouseDown}
           onMouseMove={onMouseMove}
           onMouseUp={() => (dragging.current = false)}
+          onMouseLeave={() => setHover(null)}
+          onDoubleClick={onDoubleClick}
           onWheel={onWheel}
         />
+        <AnnotationOverlay pattern={pattern} first={first} rows={rows} cw={cw} trackX={trackStarts(pattern)} top={HEADER_H} hover={hover} carried={carried} />
       </div>
     </div>
   );
@@ -184,6 +225,7 @@ function drawPattern(
   playLine: number,
   marks: Map<string, 'warn' | 'error'>,
   lpb: number,
+  carried: ChordMarker | null,
 ) {
   const LH = theme.lineHeight;
   ctx.fillStyle = theme.bg;
@@ -245,6 +287,9 @@ function drawPattern(
     });
   }
 
+  const trackEnd = pat.tracks.map((t, i) => trackX[i] + trackChars(t.noteColumns));
+  drawAnnotations(ctx, { pat, first, rows, cw, trackX, trackEnd, carried });
+
   // Cursor box.
   const cr = ui.cursor.line - first;
   if (cr >= 0 && cr < rows && pat.tracks[ui.cursor.track]) {
@@ -303,6 +348,12 @@ function onKeyDown(e: React.KeyboardEvent) {
         return handled();
       case 'KeyA':
         selectAllInTrack();
+        return handled();
+      case 'KeyK':
+        openChordEditor();
+        return handled();
+      case 'KeyM':
+        openCommentEditor(e.altKey);
         return handled();
     }
     return; // Ctrl+Z / Ctrl+Y are global.
@@ -441,7 +492,7 @@ function TrackHeader({ pattern, index, width, active }: { pattern: Pattern; inde
           title="Delete track"
           className="danger"
           onClick={() => {
-            if (pattern.tracks.length > 1) setTrack((pat) => ({ ...pat, tracks: pat.tracks.filter((_, i) => i !== index) }));
+            if (pattern.tracks.length > 1) setTrack((pat) => commentsAfterTrackDelete({ ...pat, tracks: pat.tracks.filter((_, i) => i !== index) }, index));
           }}
         >
           ×
@@ -506,14 +557,19 @@ function PatternBar({ pattern }: { pattern: Pattern }) {
             const lines = Math.max(1, Math.min(256, Number(e.target.value) || 1));
             store.update(
               (p) =>
-                updatePattern(p, pattern.id, (pat) => ({
-                  ...pat,
-                  lines,
-                  tracks: pat.tracks.map((t) => ({
-                    ...t,
-                    cells: Array.from({ length: lines }, (_, l) => t.cells[l] ?? Array.from({ length: t.noteColumns }, () => null)),
-                  })),
-                })),
+                updatePattern(p, pattern.id, (pat) =>
+                  dropAnnotationsPast(
+                    {
+                      ...pat,
+                      lines,
+                      tracks: pat.tracks.map((t) => ({
+                        ...t,
+                        cells: Array.from({ length: lines }, (_, l) => t.cells[l] ?? Array.from({ length: t.noteColumns }, () => null)),
+                      })),
+                    },
+                    lines,
+                  ),
+                ),
               `plines:${pattern.id}`,
             );
           }}
@@ -528,7 +584,12 @@ function PatternBar({ pattern }: { pattern: Pattern }) {
       >
         + Track
       </button>
-      <FxHelp pattern={pattern} />
+      <KeyPicker pattern={pattern} />
+      <span className="cursor-info">
+        <CursorComment pattern={pattern} />
+        <FxHelp pattern={pattern} />
+        <NoteInfo pattern={pattern} />
+      </span>
       <span className="hint">
         {ui.editMode ? 'EDIT' : 'play'} · oct {ui.octave} · step {ui.editStep}
       </span>

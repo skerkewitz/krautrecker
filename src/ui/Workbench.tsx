@@ -5,6 +5,7 @@ import { demoProject } from '../model/demoSong';
 import type { Project } from '../model/types';
 import { stop } from './actions';
 import { AramMeter, Diagnostics, OrderList, VoiceMeter } from './BottomPanels';
+import { CommentsPanel } from './Comments';
 import { DevicePanel } from './DevicePanel';
 import { HardwarePanel } from './HardwarePanel';
 import { CloseIcon, DevicesIcon, HardwareIcon, MenuIcon, SamplesIcon, SongIcon } from './icons';
@@ -145,6 +146,8 @@ const SHORTCUTS: [string, string][] = [
   ['Shift+Space', 'Play pattern (looped)'],
   ['Enter', 'Play from the cursor'],
   ['Ctrl+B / Ctrl+J / Ctrl+Alt+B', 'Toggle left sidebar / panel / IR view'],
+  ['Ctrl+K, double-click the chord lane', 'Chord marker at the cursor line (Enter saves, empty removes)'],
+  ['Ctrl+M / Ctrl+Alt+M', 'Comment on the cursor cell / on the whole line (empty removes)'],
   ['U D P V T A L C R G N', 'Note effects: slide up/down, porta, vibrato, tremolo, volume/pan slide, cut, retrigger, GAIN, noise'],
   ['M K X', 'Track effects: volume, volume slide, pan (until the pattern ends)'],
   ['F W H E Y B Z', 'Global effects: tempo, main volume (slide), echo volume (slide), echo feedback, echo write'],
@@ -205,12 +208,14 @@ const TABS: { id: BottomTab; title: string }[] = [
   { id: 'voices', title: 'Voices' },
   { id: 'aram', title: 'ARAM' },
   { id: 'diagnostics', title: 'Diagnostics' },
+  { id: 'comments', title: 'Comments' },
 ];
 
 export function BottomPanel() {
   const tab = useStore((s) => s.ui.layout.bottomTab);
   const project = useStore((s) => s.project);
   const problems = useMemo(() => store.songIR().diagnostics.filter((d) => d.severity !== 'info').length, [project]);
+  const comments = project.patterns.reduce((n, p) => n + p.comments.length, 0);
   return (
     <section className="bottom-panel">
       <div className="panel-tabs">
@@ -218,6 +223,7 @@ export function BottomPanel() {
           <button key={t.id} className={`panel-tab${t.id === tab ? ' active' : ''}`} onClick={() => setLayout({ bottomTab: t.id })}>
             {t.title}
             {t.id === 'diagnostics' && problems > 0 && <span className="badge">{problems}</span>}
+            {t.id === 'comments' && comments > 0 && <span className="badge">{comments}</span>}
           </button>
         ))}
         <button className="icon-button panel-close" title="Hide panel (Ctrl+J)" aria-label="Hide panel" onClick={() => setLayout({ bottomOpen: false })}>
@@ -228,6 +234,7 @@ export function BottomPanel() {
         {tab === 'voices' && <VoiceMeter />}
         {tab === 'aram' && <AramMeter />}
         {tab === 'diagnostics' && <Diagnostics />}
+        {tab === 'comments' && <CommentsPanel />}
       </div>
     </section>
   );

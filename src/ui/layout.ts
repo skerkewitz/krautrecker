@@ -5,7 +5,7 @@
  */
 
 export type LeftView = 'devices' | 'samples' | 'song' | 'hardware';
-export type BottomTab = 'voices' | 'aram' | 'diagnostics';
+export type BottomTab = 'voices' | 'aram' | 'diagnostics' | 'comments';
 
 export interface Layout {
   leftView: LeftView;
