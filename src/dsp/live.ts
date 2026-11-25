@@ -227,7 +227,8 @@ export class LivePlayer {
 
     // Same order as the compiler: events of notes that own voices first, then new notes.
     for (const s of this.sounding) {
-      while (s.cursor < s.note.events.length) {
+      // A long release schedules its key-off for a later tick; it waits here until then.
+      while (s.cursor < s.note.events.length && s.note.events[s.cursor].tick <= t) {
         const ev = s.note.events[s.cursor++];
         const v = this.alloc.applyEvent(s.note, ev, t);
         if (v >= 0) applyVoiceEvent(this.dsp, v, ev);

@@ -50,7 +50,15 @@ export type VoiceEvent =
   | (EventBase & { type: 'keyOff' })
   | (EventBase & { type: 'setPitch'; pitch: number; clamped?: boolean })
   | (EventBase & { type: 'setVolume'; volL: number; volR: number })
-  | (EventBase & { type: 'setEnvelope'; envelope: DspEnvelope })
+  | (EventBase & {
+      type: 'setEnvelope';
+      envelope: DspEnvelope;
+      /**
+       * This switch starts the note's release (a GAIN decrease at note-off). The voice counts as
+       * releasing from here; the key-off that follows once the envelope is at zero frees it at once.
+       */
+      release?: boolean;
+    })
   /** Noise on/off for this voice (NON). The noise clock itself is global: see 'noiseClock'. */
   | (EventBase & { type: 'noise'; enabled: boolean })
   /** Pitch modulation of this voice by the previous voice's output (PMON). */

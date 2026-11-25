@@ -22,6 +22,7 @@ interface VoiceState {
   note: LogicalNote | null;
   /** Assignment order; lower = older. Breaks ties between notes started on the same tick. */
   seq: number;
+  /** Tick the note's release began: its key-off, or the GAIN switch of a long release. */
   keyOffTick: number;
   freeAt: number;
 }
@@ -70,10 +71,15 @@ export class VoiceAllocator {
   applyEvent(note: LogicalNote, event: VoiceEvent, tick: number): number {
     const v = this.owns(note);
     if (v < 0) return -1;
-    if (event.type === 'keyOff') {
-      const s = this.state[v];
+    const s = this.state[v];
+    if (event.type === 'setEnvelope' && event.release) {
+      // A GAIN release: the voice is releasing from now on; its key-off follows once it is silent.
       s.keyOffTick = Math.min(s.keyOffTick, tick);
-      s.freeAt = Math.min(s.freeAt, tick + this.releaseTicks);
+    } else if (event.type === 'keyOff') {
+      // After a GAIN release the envelope is already at zero, so the voice is free at once.
+      const silent = s.keyOffTick < tick;
+      s.keyOffTick = Math.min(s.keyOffTick, tick);
+      s.freeAt = Math.min(s.freeAt, silent ? tick : tick + this.releaseTicks);
     }
     return v;
   }
