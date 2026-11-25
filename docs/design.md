@@ -243,6 +243,62 @@ the real BRR sizes, the echo buffer (2 KB per 16 ms of delay) and the song data.
 guess until Milestone 2 picks a driver: 3 bytes per IR event the composer caused. Per-tick events from
 slides and vibrato are excluded, because a driver computes those itself.
 
+## Loudness belongs in main volume, because the voice mix clips first
+
+The S-DSP adds the eight voices with a 16-bit clamp and applies main volume only afterwards. A song can
+therefore clip inside the chip while its output peak looks harmless: with main volume at 90/128 the
+output never reaches full scale, but the clamped sum underneath already distorts. The fix is headroom in
+the voices (device, zone, note and track volume) and loudness in main volume, which is what the demo
+song does. The DSP model counts clamped frames in the voice mix, the echo input and the output, so the
+analysis command can report all three.
+
+## Harmony is stated, not inferred
+
+A song can declare its key, a pattern can declare a different key (a modulation), and chord markers
+name the chord at a line until the next marker, also across pattern boundaries in song order. None of
+this changes the sound. It records what the composer intends, so the editor can show a note's scale
+degree and its relation to the chord, and the musical checks can compare the notes with that intent.
+We chose stated harmony over chord detection because detection guesses, and a check built on a guess
+produces hints nobody trusts. Line comments sit in the same layer: notes for the composer or feedback
+anchored to a cell, never part of the compiled song.
+
+## Musical and hardware checks
+
+The compiler adds checks that catch problems a composer usually finds only by ear. They come in two
+categories. Hardware problems are warnings; musical hints are always `info` and can be hidden, because
+a clash can be intended and the tool must not nag.
+
+- **Aliasing (hardware).** At sample build, a spectrum analysis finds the sample's highest significant
+  partial: within 40 dB of the strongest one, after weighting by the Gaussian interpolation's own
+  roll-off, because 40 dB is roughly BRR's quantisation noise. A note that lifts that partial above the
+  16 kHz Nyquist frequency of the 32 kHz output folds it back as an off-pitch tone, so the compiler
+  warns once per zone at the worst note and names the highest clean note.
+- **Detune.** Instruments sounding together whose deviation from equal temperament differs by more
+  than 5 cents, near the threshold of hearing for simultaneous tones. The deviation counts device fine
+  tune and the 14-bit pitch register's rounding, but not a sample's fine tune, which calibrates the
+  sample rather than detuning it.
+- **Chord clashes and notes outside the key.** A note starting on a beat that sits a semitone or a
+  tritone from a tone of the chord in force, or outside the key when no chord explains it. The bass of
+  a slash chord counts as a chord tone, because "D/E" states an E pedal.
+- **Register crowding.** Two instruments holding notes within two semitones of each other for at least
+  a beat, which is long enough to hear as masking.
+
+## The analysis command: the composer's measuring ears
+
+`npm run analyze` renders a song through the real playback path and reports per section and per track:
+loudness, peaks, clamping, spectral balance, masking hints, tuning, voice use, diagnostics and comments.
+It exists so that a composer who cannot listen at the moment, or an AI composer that cannot listen at
+all, can check a song before anyone hears it.
+
+Stems are rendered by muting, not by removing events: each stem plays the full IR with the other
+tracks' volumes at zero. Removing events would change voice allocation (a stolen note would ring on in
+its own stem) and would break pitch modulation, which reads the neighbouring voice before its volume.
+Without clipping, the stems add up to the mix within one sample step.
+
+The pattern text format serves the same reader. It writes cells as the editor shows them, one pattern
+line per text line, so patterns can be read and written outside the app and exchanged through the
+system clipboard.
+
 ## Known gaps in this prototype
 
 These are open on purpose, so that the prototype stays small:

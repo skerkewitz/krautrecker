@@ -24,7 +24,11 @@ it does is in [docs/design.md](docs/design.md). Read both before structural chan
 
 ## Working rules
 
-- `npm test` and `npm run build` must pass before you call work done.
+- `npm test`, `npm run typecheck` (it also checks `tools/`) and `npm run build` must pass before you
+  call work done.
+- When you write or change a song (the demo in `src/model/demoSong.ts` or any project), run
+  `npm run analyze -- <song>` and fix clipping in the voice mix, warnings and tuning before calling it
+  finished. You cannot hear the music; the analysis and the musical hints are how you check it.
 - A new device rule, effect or allocation rule comes with a compiler test. Golden snapshots live in
   `src/compiler/__snapshots__/`; check a changed snapshot by hand before updating it with `vitest -u`.
 - On Windows, run Vitest from the upper-case drive path (`cd /D/Develop/Krautrecker` in Git Bash);

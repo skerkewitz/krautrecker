@@ -580,10 +580,17 @@ legend {
 .pattern-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 4px 8px;
   padding: 5px 8px;
   background: var(--panel);
   border-bottom: 1px solid var(--border);
+}
+/* When the bar is crowded it wraps into a second row; each control stays on one line. */
+.pattern-bar > button,
+.pattern-bar > label,
+.pattern-bar > .hint {
+  white-space: nowrap;
 }
 .pattern-bar label {
   display: flex;

@@ -106,7 +106,7 @@ function devices(): Device[] {
   ];
   drums.maxVoices = 2;
   drums.priority = 220;
-  drums.volume = 112;
+  drums.volume = 48;
 
   // Hi-hats from the noise generator. The silent one-shot under each zone sets the length.
   const hats = newDevice('Noise hats', 'drum', [], 'dev_hats');
@@ -116,19 +116,19 @@ function devices(): Device[] {
   ];
   hats.maxVoices = 1;
   hats.priority = 210;
-  hats.volume = 60;
+  hats.volume = 36;
   hats.pan = 12;
 
   const bass = newDevice('Motor bass', 'mono', [newZone('smp_saw_lo')], 'dev_bass');
   bass.envelope = { attack: 15, decay: 5, sustainLevel: 3, sustainRate: 12 };
   bass.priority = 200;
-  bass.volume = 100;
+  bass.volume = 52;
 
   const arp = newDevice('Arp', 'arp', [newZone('smp_saw_lo', [0, 71]), newZone('smp_saw_hi', [72, 127])], 'dev_arp');
   arp.arp = { rate: 6, direction: 'upDown', octaves: 2 };
   arp.envelope = { attack: 15, decay: 6, sustainLevel: 3, sustainRate: 14 };
   arp.priority = 150;
-  arp.volume = 58;
+  arp.volume = 35;
   arp.pan = -22;
   arp.echo = true;
 
@@ -137,7 +137,7 @@ function devices(): Device[] {
   pad.envelope = { attack: 7, decay: 2, sustainLevel: 5, sustainRate: 0 };
   pad.release = { mode: 'exp', rate: 18 };
   pad.priority = 100;
-  pad.volume = 52;
+  pad.volume = 31;
   pad.surround = true;
   pad.echo = true;
 
@@ -147,7 +147,7 @@ function devices(): Device[] {
   lead.release = { mode: 'linear', rate: 12 };
   lead.envelope = { attack: 13, decay: 7, sustainLevel: 7, sustainRate: 0 };
   lead.priority = 190;
-  lead.volume = 50;
+  lead.volume = 25;
   lead.pan = 10;
   lead.echo = true;
 
@@ -163,7 +163,7 @@ function devices(): Device[] {
   bell.envelope = { attack: 15, decay: 5, sustainLevel: 3, sustainRate: 11 };
   bell.release = { mode: 'exp', rate: 16 };
   bell.priority = 230;
-  bell.volume = 78;
+  bell.volume = 47;
   bell.pan = -12;
   bell.echo = true;
 
@@ -173,7 +173,7 @@ function devices(): Device[] {
   wind.release = { mode: 'exp', rate: 18 };
   wind.tremolo = { depth: 34, rate: 40, delay: 0 };
   wind.priority = 120;
-  wind.volume = 56;
+  wind.volume = 34;
   wind.echo = true;
 
   return [drums, hats, bass, arp, pad, lead, bellMod, bell, wind];
@@ -314,7 +314,7 @@ function groove(p: Pat, padVoices: number): void {
 
 /** Tempo, main volume and echo as they are in the main sections, so each pattern plays alone too. */
 function cruise(p: Pat): void {
-  p.fx(T.cond, 0, 0, fx('F', 132), fx('W', 0x5a));
+  p.fx(T.cond, 0, 0, fx('F', 132), fx('W', 0x74));
   p.fx(T.cond, 1, 0, fx('E', 0x28), fx('B', 0x30));
 }
 
@@ -325,10 +325,10 @@ function dawn(): Pattern {
   const p = new Pat('pat_dawn', 'Dämmerung');
   // Main volume fades in: W sets the start, H slides, H00 continues the slide by effect memory.
   p.fx(T.cond, 0, 0, fx('F', 100), fx('W', 0x10));
-  p.fx(T.cond, 1, 0, fx('H', 0x10), fx('E', 0x30));
+  p.fx(T.cond, 1, 0, fx('H', 0x20), fx('E', 0x30));
   p.fx(T.cond, 2, 0, fx('B', 0x50));
-  for (let l = 3; l <= 12; l++) p.fx(T.cond, l, 0, fx('H', 0x00));
-  p.fx(T.cond, 13, 0, fx('W', 0x5a));
+  for (let l = 3; l <= 9; l++) p.fx(T.cond, l, 0, fx('H', 0x00));
+  p.fx(T.cond, 10, 0, fx('W', 0x74));
   // Accelerando, one step per bar.
   p.fx(T.cond, 16, 0, fx('F', 108));
   p.fx(T.cond, 32, 0, fx('F', 116));
@@ -568,8 +568,9 @@ export function demoProject(): Project {
   project.order = ['pat_dawn', 'pat_motor', 'pat_autobahn', 'pat_lane', 'pat_exit', 'pat_valley', 'pat_silence'];
   project.loopOrderIndex = 2;
   project.hardware.echo = { delay: 7, feedback: 0x30, volumeL: 0x28, volumeR: 0x28, fir: [96, 16, 8, 4, 2, 1, 0, 0], writeEnabled: true };
-  project.hardware.mainVolumeL = 90;
-  project.hardware.mainVolumeR = 90;
+  // Loudness lives in main volume, which acts after the voice mix is clamped to 16 bits.
+  project.hardware.mainVolumeL = 116;
+  project.hardware.mainVolumeR = 116;
   project.seed = 0x4b52;
   return project;
 }
