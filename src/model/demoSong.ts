@@ -58,8 +58,10 @@ function samples(): Sample[] {
   let phase = 0;
   return [
     waveSample('smp_saw_lo', 'Saw low', 128, 30, false),
-    waveSample('smp_saw_hi', 'Saw high', 32, 12, false),
-    waveSample('smp_square', 'Square', 64, 31, true),
+    // Saw high plays up to G6 (8 semitones above its root): 9 harmonics stay below 16 kHz.
+    waveSample('smp_saw_hi', 'Saw high', 32, 9, false),
+    // The lead square plays up to A5 (10 semitones up): odd harmonics up to the 17th stay below 16 kHz.
+    waveSample('smp_square', 'Square', 64, 17, true),
     waveSample('smp_sine', 'Sine', 64, 1, false),
     stringsSample(),
     drumSample(
@@ -129,7 +131,6 @@ function devices(): Device[] {
   arp.volume = 58;
   arp.pan = -22;
   arp.echo = true;
-  arp.fineTune = 4;
 
   const pad = newDevice('Strings', 'poly', [newZone('smp_strings')], 'dev_pad');
   pad.maxVoices = 3;
@@ -141,15 +142,14 @@ function devices(): Device[] {
   pad.echo = true;
 
   const lead = newDevice('Lead', 'legato', [newZone('smp_square')], 'dev_lead');
-  lead.legatoPortamento = 3;
-  lead.vibrato = { depth: 0.2, rate: 22, delay: 18, fadeIn: 30 };
+  lead.legatoPortamento = 0;
+  lead.vibrato = { depth: 0.12, rate: 24, delay: 30, fadeIn: 24 };
   lead.release = { mode: 'linear', rate: 12 };
   lead.envelope = { attack: 13, decay: 7, sustainLevel: 7, sustainRate: 0 };
   lead.priority = 190;
   lead.volume = 50;
   lead.pan = 10;
   lead.echo = true;
-  lead.fineTune = 6;
 
   // FM bell: a silent sine modulates the audible sine on the voice above it (pitch modulation).
   // Its own envelope decays faster, so the bell starts bright and mellows.
@@ -396,33 +396,39 @@ function autobahn(): Pattern {
   return p.p;
 }
 
-/** A': a legato lead on top. Glides, porta (P, P00), a falling slide (D, D00) and a slow release. */
+/** A': a legato lead on top: chord tones on the beats, one portamento leap (P, P00), vibrato that blooms on held notes, a short fall and a linear release. */
 function fastLane(): Pattern {
   const p = new Pat('pat_lane', 'Überholspur');
   cruise(p);
   groove(p, 2);
   p.note(T.pad, 0, 2, NOTE_OFF);
   const L = T.lead;
-  p.note(L, 0, 0, n('B4'), 0x70)
-    .note(L, 6, 0, n('D5'))
+  p.note(L, 0, 0, n('E5'), 0x70)
+    .note(L, 4, 0, n('G5'))
+    .note(L, 6, 0, n('F#5'))
     .note(L, 8, 0, n('E5'))
-    .note(L, 12, 0, n('F#5'))
-    .note(L, 16, 0, n('G5'))
-    .note(L, 24, 0, n('F#5'))
-    .note(L, 28, 0, n('E5'))
-    // A porta glide up to A5 (P30), continued on the next line by effect memory (P00).
-    .note(L, 32, 0, n('A5'), undefined, fx('P', 0x30))
+    .note(L, 12, 0, n('B4'))
+    .note(L, 14, 0, n('D5'))
+    .note(L, 16, 0, n('F#5'))
+    .note(L, 24, 0, n('A5'))
+    .note(L, 26, 0, n('G5'))
+    .note(L, 28, 0, n('F#5'))
+    .note(L, 30, 0, n('C5'))
+    // The one deliberate glide: a fifth up from C5 to G5 (P20), continued by effect memory (P00).
+    .note(L, 32, 0, n('G5'), undefined, fx('P', 0x20))
     .fx(L, 33, 0, fx('P', 0x00))
-    .note(L, 40, 0, n('F#5'))
-    .note(L, 44, 0, n('E5'))
-    .note(L, 48, 0, n('G5'))
-    .note(L, 52, 0, n('F#5'))
-    .note(L, 54, 0, n('E5'))
-    // The last note falls away: D08, then D00 twice, then a note-off with the linear release.
-    .fx(L, 57, 0, fx('D', 0x08))
-    .fx(L, 58, 0, fx('D', 0x00))
-    .fx(L, 59, 0, fx('D', 0x00))
-    .note(L, 60, 0, NOTE_OFF);
+    .fx(L, 34, 0, fx('P', 0x00))
+    .note(L, 40, 0, n('E5'))
+    .note(L, 44, 0, n('C5'))
+    .note(L, 46, 0, n('D5'))
+    .note(L, 48, 0, n('F#5'))
+    .note(L, 52, 0, n('A5'))
+    .note(L, 56, 0, n('E5'))
+    // A short fall as the last note is let go (D18), then the linear release.
+    .fx(L, 61, 0, fx('D', 0x18))
+    .note(L, 62, 0, NOTE_OFF);
+  // The arp steps back under the lead: lower track volume in this pattern's header.
+  p.p.tracks[T.arp].volume = 88;
   return p.p;
 }
 

@@ -361,6 +361,9 @@ export class TrackProcessor {
         cur.note = cell.note;
         cur.source = source;
         cur.cellTouched = true;
+        // Device vibrato's delay and fade-in restart with each legato note, as a singer starts
+        // vibrato afresh on every held note instead of wobbling through quick ones.
+        cur.age = 0;
         this.applyVolPan(cur, cell);
         return;
       }

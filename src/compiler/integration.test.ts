@@ -84,3 +84,15 @@ describe('surround with other volume changes', () => {
     for (const e of changes) expect(e.volR).toBeLessThanOrEqual(0);
   });
 });
+
+describe('legato and device vibrato', () => {
+  it('the vibrato delay restarts with each legato note', () => {
+    const lead = device('l', 'legato', { vibrato: { depth: 0.5, rate: 8, delay: 12, fadeIn: 0 } });
+    const ir = compileSong(fixture([{ device: lead, cells: [[0, 0, { note: 60 }], [4, 0, { note: 62 }]] }], () => {}, 8));
+    const auto = (from: number, to: number) => ir.voices[0].filter((e) => e.type === 'setPitch' && e.auto && e.tick >= from && e.tick < to).length;
+    // First note: vibrato starts after 12 ticks (tick 12). Second note at tick 24: quiet again for 12 ticks.
+    expect(auto(12, 24)).toBeGreaterThan(0);
+    expect(auto(25, 36)).toBe(0);
+    expect(auto(36, 48)).toBeGreaterThan(0);
+  });
+});
